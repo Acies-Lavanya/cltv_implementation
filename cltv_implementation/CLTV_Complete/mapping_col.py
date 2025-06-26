@@ -90,10 +90,6 @@ if orders_df is not None and transactions_df is not None:
                 st.session_state["customer_df"] = customer_segmented
 
                 st.success("🎉 Data processed and mapped successfully!")
-                st.subheader("📋 Orders Sample")
-                st.dataframe(processed_orders.head(), use_container_width=True)
-                st.subheader("📋 Transactions Sample")
-                st.dataframe(processed_trans.head(), use_container_width=True)
                 st.subheader("🧍‍♂️ Customer-Level Features with RFM Segmentation")
                 st.dataframe(customer_segmented.head(), use_container_width=True)
 

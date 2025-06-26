@@ -14,6 +14,9 @@ class Customer_level:
 ).reset_index()
         customer_level['aov'] = round(customer_level['monetary'] / customer_level['frequency'],2)
         customer_level['avg_days_between_orders'] = round((customer_level['last_purchase'] - customer_level['first_purchase']).dt.days / (customer_level['frequency'] - 1),0).fillna(-1).astype(int)
+        customer_level['lifespan_days'] = (customer_level['last_purchase'] - customer_level['first_purchase']).dt.days + 1
+        customer_level['lifespan_months'] = round(customer_level['lifespan_days'] / 30, 2)
+        customer_level['CLTV'] = round(customer_level['aov'] * customer_level['frequency'] * customer_level['lifespan_months'], 2)
 
         return customer_level
 
