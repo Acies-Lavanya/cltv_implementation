@@ -8,10 +8,10 @@ def input_processing(order_path,transaction_path):
 
 def data_type(order_df, transaction_df):
 
-    transaction_df['purchase_date'] = pd.to_datetime(transaction_df['purchase_date'], dayfirst=True)
-    order_df['return_date'] = pd.to_datetime(order_df['return_date'], dayfirst=True)
+    transaction_df['Purchase Date'] = pd.to_datetime(transaction_df['Purchase Date'], dayfirst=True)
+    order_df['Return Date'] = pd.to_datetime(order_df['Return Date'], dayfirst=True)
 
-    order_df[['Unit_price','total_amount', 'discount_value', 'shipping_cost', 'total_payable']] = order_df[[ 'Unit_price','total_amount', 'discount_value', 'shipping_cost', 'total_payable']].astype('float')
+    order_df[['Unit Price','Total Amount', 'Discount Value', 'Shipping Cost', 'Total Payable']] = order_df[[ 'Unit Price','Total Amount', 'Discount Value', 'Shipping Cost', 'Total Payable']].astype('float')
     return order_df, transaction_df
 
 

@@ -4,13 +4,13 @@ import pandas as pd
 
 class Customer_level:
     def cl_for_transaction(self, transaction_df):
-        today = transaction_df['purchase_date'].max() + pd.Timedelta(days=1)
-        customer_level = transaction_df.groupby('user_id').agg(
-        recency=('purchase_date', lambda x: (today - x.max()).days),
-        frequency=('purchase_date', 'count'),
-        monetary=('Total_amount', 'sum'),
-        last_purchase=('purchase_date', 'max'),
-        first_purchase=('purchase_date', 'min')
+        today = transaction_df['Purchase Date'].max() + pd.Timedelta(days=1)
+        customer_level = transaction_df.groupby('User ID').agg(
+        recency=('Purchase Date', lambda x: (today - x.max()).days),
+        frequency=('Purchase Date', 'count'),
+        monetary=('Total Amount', 'sum'),
+        last_purchase=('Purchase Date', 'max'),
+        first_purchase=('Purchase Date', 'min')
 ).reset_index()
         customer_level['aov'] = round(customer_level['monetary'] / customer_level['frequency'],2)
         customer_level['avg_days_between_orders'] = round((customer_level['last_purchase'] - customer_level['first_purchase']).dt.days / (customer_level['frequency'] - 1),0).fillna(-1).astype(int)

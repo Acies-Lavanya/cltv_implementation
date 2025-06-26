@@ -17,6 +17,7 @@ expected_orders_cols = {
     "Product ID": ["Product ID", "product_id", "SKU", "Item Code"],
     "Quantity": ["Quantity", "Qty", "order_quantity"],
     "Total Amount": ["Total Amount", "total_amount", "amount"],
+    "Unit Price": ["unit_price", "price"],
     "Discount Code Used": ["Discount Code Used", "discount_code_used", "promo_code"],
     "Discount Value": ["Discount Value", "discount_value", "discount_amount"],
     "Shipping Cost": ["Shipping Cost", "shipping_cost", "freight"],
@@ -31,7 +32,8 @@ expected_transaction_cols = {
     "User ID": ["User ID", "user_id", "Customer ID"],
     "Order ID": ["Order ID", "order_id"],
     "Purchase Date": ["Purchase Date", "purchase_date", "Transaction Date"],
-    "Payment Method": ["Payment Method", "payment_method", "Mode of Payment"]
+    "Payment Method": ["Payment Method", "payment_method", "Mode of Payment"],
+    "Total Amount": ["Total Payable", "total_payable", "amount_payable", "Total_amount"],
 }
 
 # ---------------------------------
