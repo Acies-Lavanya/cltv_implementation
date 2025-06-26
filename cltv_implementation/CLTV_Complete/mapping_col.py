@@ -5,26 +5,33 @@ import difflib
 # ---------------------------------
 # Streamlit App Configuration
 # ---------------------------------
-st.set_page_config(page_title="Upload Inventory Data", layout="wide")
-st.title("📥 Upload Inventory Data")
+st.set_page_config(page_title="Upload Transactional and Order Data", layout="wide")
+st.title("📥 Upload Transactional and Order Data")
 
 # ---------------------------------
-# Expected Column Definitions
+# Expected Column Definitions (Complete Mapping)
 # ---------------------------------
 expected_orders_cols = {
-    "Order Date": ["Order Date", "Date", "Order_Date", "OrderDate"],
-    "SKU ID": ["SKU ID", "SKU", "Product Code", "Item Code"],
-    "Order Quantity": ["Order Quantity", "Quantity", "Qty", "Order Qty"]
+    "Transaction ID": ["Transaction ID", "transaction_id"],
+    "Order ID": ["Order ID", "order_id"],
+    "Product ID": ["Product ID", "product_id", "SKU", "Item Code"],
+    "Quantity": ["Quantity", "Qty", "order_quantity"],
+    "Total Amount": ["Total Amount", "total_amount", "amount"],
+    "Discount Code Used": ["Discount Code Used", "discount_code_used", "promo_code"],
+    "Discount Value": ["Discount Value", "discount_value", "discount_amount"],
+    "Shipping Cost": ["Shipping Cost", "shipping_cost", "freight"],
+    "Total Payable": ["Total Payable", "total_payable", "amount_payable"],
+    "Return Status": ["Return Status", "return_stat", "is_returned"],
+    "Return Date": ["Return Date", "return_date"]
 }
 
-expected_stock_cols = {
-    "SKU ID": ["SKU ID", "SKU", "Product Code"],
-    "Current Stock Quantity": ["Current Stock Quantity", "Stock", "Available Stock"],
-    "Units (Nos/Kg)": ["Units", "Nos", "Kg", "Unit Type", "Units (Nos/Kg)"],
-    "Average Lead Time (days)": ["Average Lead Time", "Avg Lead Time", "Lead Time"],
-    "Maximum Lead Time (days)": ["Maximum Lead Time", "Max Lead Time"],
-    "Unit Price": ["Unit Price", "Price"],
-    "Safety Stock": ["Safety Stock", "Buffer Stock"]
+expected_transaction_cols = {
+    "Transaction ID": ["Transaction ID", "transaction_id"],
+    "Visit ID": ["Visit ID", "visit_id"],
+    "User ID": ["User ID", "user_id", "Customer ID"],
+    "Order ID": ["Order ID", "order_id"],
+    "Purchase Date": ["Purchase Date", "purchase_date", "Transaction Date"],
+    "Payment Method": ["Payment Method", "payment_method", "Mode of Payment"]
 }
 
 # ---------------------------------
@@ -40,143 +47,135 @@ def auto_map(col_list, candidates):
 # ---------------------------------
 # Upload Section
 # ---------------------------------
-uploaded_file = st.file_uploader("Upload your Excel file", type=["xlsx"])
+orders_file = st.file_uploader("Upload Orders CSV", type=["csv"], key="orders_upload")
+transactions_file = st.file_uploader("Upload Transactions CSV", type=["csv"], key="transactions_upload")
 
-if uploaded_file:
-    st.session_state["uploaded_file"] = uploaded_file
+if orders_file and transactions_file:
+    df_orders = pd.read_csv(orders_file)
+    df_transactions = pd.read_csv(transactions_file)
+    
+    # ---------------------------------
+    # Show Dataset Info Before Mapping
+    # ---------------------------------
+    st.markdown("### 📊 Uploaded File Overview")
 
-if "uploaded_file" in st.session_state:
-    uploaded_file = st.session_state["uploaded_file"]
-    try:
-        xls = pd.ExcelFile(uploaded_file)
-        sheet_names = xls.sheet_names
-        st.success(f"✅ Uploaded. Sheets found: {sheet_names}")
+    # Orders Info
+    with st.expander("📦 Orders CSV Info", expanded=True):
+        st.write(f"**Shape:** {df_orders.shape[0]} rows × {df_orders.shape[1]} columns")
+        
+        st.markdown("**🔤 Columns and Data Types:**")
+        st.dataframe(pd.DataFrame({
+            "Column": df_orders.columns,
+            "Data Type": [str(dtype) for dtype in df_orders.dtypes]
+        }))
 
-        order_sheet = st.selectbox("Select Past Orders Sheet", sheet_names, key="order_sheet")
-        stock_sheet = st.selectbox("Select Stock Sheet", sheet_names, key="stock_sheet")
+        st.markdown("**❗ Missing Values:**")
+        st.dataframe(
+            df_orders.isnull().sum().reset_index().rename(columns={0: "Missing Values", "index": "Column"})
+        )
 
-        df_orders = pd.read_excel(uploaded_file, sheet_name=order_sheet)
-        df_stock = pd.read_excel(uploaded_file, sheet_name=stock_sheet)
+        st.markdown("**👁️ Preview (First 5 Rows):**")
+        st.dataframe(df_orders.head(), use_container_width=True)
 
-        # Check for duplicate columns
-        if df_orders.columns.duplicated().any() or df_stock.columns.duplicated().any():
-            st.error("❌ Duplicate column names detected in your file. Please fix them and re-upload.")
-        else:
-            # Auto Mapping Columns
-            order_mappings = {
-                k: auto_map(df_orders.columns.tolist(), v) or ""
-                for k, v in expected_orders_cols.items()
-            }
-            stock_mappings = {
-                k: auto_map(df_stock.columns.tolist(), v) or ""
-                for k, v in expected_stock_cols.items()
-            }
+        st.markdown("**📈 Summary Statistics (Numeric Columns):**")
+        st.dataframe(df_orders.describe().T, use_container_width=True)
 
-            # Display auto-mapping
-            st.markdown("### ✅ Auto-Mapped Columns")
-            mapping_display = pd.DataFrame({
-                "Standard Name": list(order_mappings.keys()) + list(stock_mappings.keys()),
-                "Mapped Column": list(order_mappings.values()) + list(stock_mappings.values()),
-                "Sheet": ["Past Orders"] * len(order_mappings) + ["Stock"] * len(stock_mappings)
-            })
-            st.dataframe(mapping_display, use_container_width=True)
+    # Transactions Info
+    with st.expander("🧾 Transactions CSV Info", expanded=True):
+        st.write(f"**Shape:** {df_transactions.shape[0]} rows × {df_transactions.shape[1]} columns")
+        
+        st.markdown("**🔤 Columns and Data Types:**")
+        st.dataframe(pd.DataFrame({
+            "Column": df_transactions.columns,
+            "Data Type": [str(dtype) for dtype in df_transactions.dtypes]
+        }))
 
-            st.divider()
-            st.subheader("✏️ Edit Mappings (Optional)")
+        st.markdown("**❗ Missing Values:**")
+        st.dataframe(
+            df_transactions.isnull().sum().reset_index().rename(columns={0: "Missing Values", "index": "Column"})
+        )
 
-            # Editable Mappings
-            with st.expander("📝 Edit Past Orders Column Mapping"):
-                for k in expected_orders_cols:
-                    order_mappings[k] = st.selectbox(
-                        f"Map for: {k}",
-                        df_orders.columns,
-                        index=df_orders.columns.get_loc(order_mappings[k]) if order_mappings[k] in df_orders.columns else 0,
-                        key=f"order_{k}"
-                    )
+        st.markdown("**👁️ Preview (First 5 Rows):**")
+        st.dataframe(df_transactions.head(), use_container_width=True)
 
-            with st.expander("📦 Edit Stock Column Mapping"):
-                for k in expected_stock_cols:
-                    stock_mappings[k] = st.selectbox(
-                        f"Map for: {k}",
-                        df_stock.columns,
-                        index=df_stock.columns.get_loc(stock_mappings[k]) if stock_mappings[k] in df_stock.columns else 0,
-                        key=f"stock_{k}"
-                    )
+        st.markdown("**📈 Summary Statistics (Numeric Columns):**")
+        st.dataframe(df_transactions.describe().T, use_container_width=True)
 
-            # Confirm Button
-            if st.button("✅ Confirm and Merge Data"):
-                try:
-                    # Select and rename relevant columns for orders
-                    orders_df = df_orders[
-                        [order_mappings["Order Date"], order_mappings["SKU ID"], order_mappings["Order Quantity"]]
-                    ].rename(columns={
-                        order_mappings["Order Date"]: "Order Date",
-                        order_mappings["SKU ID"]: "SKU ID",
-                        order_mappings["Order Quantity"]: "Order Quantity"
-                    })
+    # Check for duplicate columns
+    if df_orders.columns.duplicated().any() or df_transactions.columns.duplicated().any():
+        st.error("❌ Duplicate column names detected. Please fix and re-upload.")
+        
+    else:
+        # Auto Mapping Columns
+        orders_mappings = {
+            k: auto_map(df_orders.columns.tolist(), v) or ""
+            for k, v in expected_orders_cols.items()
+        }
+        trans_mappings = {
+            k: auto_map(df_transactions.columns.tolist(), v) or ""
+            for k, v in expected_transaction_cols.items()
+        }
 
-                    # Ensure datetime
-                    orders_df["Order Date"] = pd.to_datetime(orders_df["Order Date"], errors="coerce")
+        # Display auto-mapping
+        st.markdown("### ✅ Auto-Mapped Columns")
+        mapping_display = pd.DataFrame({
+            "Standard Name": list(orders_mappings.keys()) + list(trans_mappings.keys()),
+            "Mapped Column": list(orders_mappings.values()) + list(trans_mappings.values()),
+            "Sheet": ["Orders"] * len(orders_mappings) + ["Transactions"] * len(trans_mappings)
+        })
+        st.dataframe(mapping_display, use_container_width=True)
 
-                    # Select and rename relevant columns for stock
-                    stock_df = df_stock[
-                        [stock_mappings["SKU ID"], stock_mappings["Current Stock Quantity"], stock_mappings["Units (Nos/Kg)"],
-                         stock_mappings["Average Lead Time (days)"], stock_mappings["Maximum Lead Time (days)"],
-                         stock_mappings["Unit Price"], stock_mappings["Safety Stock"]]
-                    ].rename(columns={
-                        stock_mappings["SKU ID"]: "SKU ID",
-                        stock_mappings["Current Stock Quantity"]: "Current Stock Quantity",
-                        stock_mappings["Units (Nos/Kg)"]: "Units (Nos/Kg)",
-                        stock_mappings["Average Lead Time (days)"]: "Average Lead Time (days)",
-                        stock_mappings["Maximum Lead Time (days)"]: "Maximum Lead Time (days)",
-                        stock_mappings["Unit Price"]: "Unit Price",
-                        stock_mappings["Safety Stock"]: "Safety Stock"
-                    })
+        st.divider()
+        st.subheader("✏️ Edit Mappings (Optional)")
 
-                    # Remove duplicate columns if any
-                    stock_df = stock_df.loc[:, ~stock_df.columns.duplicated()]
+        # Editable Mappings
+        with st.expander("📝 Edit Orders Column Mapping"):
+            for k in expected_orders_cols:
+                orders_mappings[k] = st.selectbox(
+                    f"Map for: {k}",
+                    df_orders.columns,
+                    index=df_orders.columns.get_loc(orders_mappings[k]) if orders_mappings[k] in df_orders.columns else 0,
+                    key=f"orders_{k}"
+                )
 
-                    # ---- Aggregations ----
-                    agg_orders = orders_df.groupby("SKU ID").agg({
-                        "Order Quantity": ["sum", "mean", "std"]
-                    }).reset_index()
-                    agg_orders.columns = ["SKU ID", "Order Quantity sum", "Order Quantity mean", "Order Quantity std"]
+        with st.expander("🧾 Edit Transaction Column Mapping"):
+            for k in expected_transaction_cols:
+                trans_mappings[k] = st.selectbox(
+                    f"Map for: {k}",
+                    df_transactions.columns,
+                    index=df_transactions.columns.get_loc(trans_mappings[k]) if trans_mappings[k] in df_transactions.columns else 0,
+                    key=f"transactions_{k}"
+                )
 
-                    # Last Order Date
-                    last_order_df = orders_df.groupby("SKU ID")["Order Date"].max().reset_index(name="Last Order Date")
+        # Confirm Button
+        if st.button("✅ Confirm and Process"):
+            try:
+                # Process Orders Data
+                orders_df = df_orders[
+                    [orders_mappings[k] for k in expected_orders_cols]
+                ].rename(columns={orders_mappings[k]: k for k in expected_orders_cols})
 
-                    # Median Days Between Orders
-                    def compute_median_days(group):
-                        group = group.sort_values("Order Date")
-                        group["Days Between Orders"] = group["Order Date"].diff().dt.days
-                        return pd.Series({
-                            "Median Days Between Orders": group["Days Between Orders"].median()
-                        })
+                # Process Transactions Data
+                trans_df = df_transactions[
+                    [trans_mappings[k] for k in expected_transaction_cols]
+                ].rename(columns={trans_mappings[k]: k for k in expected_transaction_cols})
 
-                    median_days_df = orders_df.groupby("SKU ID").apply(compute_median_days).reset_index()
+                # Convert dates
+                if "Return Date" in orders_df.columns:
+                    orders_df["Return Date"] = pd.to_datetime(orders_df["Return Date"], errors="coerce")
+                if "Purchase Date" in trans_df.columns:
+                    trans_df["Purchase Date"] = pd.to_datetime(trans_df["Purchase Date"], errors="coerce")
 
-                    # Merge all
-                    merged_df = pd.merge(stock_df, agg_orders, on="SKU ID", how="left")
-                    merged_df = pd.merge(merged_df, last_order_df, on="SKU ID", how="left")
-                    merged_df = pd.merge(merged_df, median_days_df, on="SKU ID", how="left")
+                # Output
+                st.success("🎉 Data processed and mapped successfully!")
+                st.subheader("📋 Orders Sample")
+                st.dataframe(orders_df.head(), use_container_width=True)
+                st.subheader("📋 Transactions Sample")
+                st.dataframe(trans_df.head(), use_container_width=True)
 
-                    # Drop duplicate columns again if needed
-                    merged_df = merged_df.loc[:, ~merged_df.columns.duplicated()]
+                # Save in session
+                st.session_state["orders_df"] = orders_df
+                st.session_state["transactions_df"] = trans_df
 
-                    # Fill missing values
-                    merged_df.fillna(0, inplace=True)
-
-                    # Output
-                    st.success("🎉 Data merged and enriched successfully!")
-                    st.dataframe(merged_df, use_container_width=True)
-
-                    # Store in session
-                    st.session_state["orders_df"] = orders_df
-                    st.session_state["stock_df"] = stock_df
-                    st.session_state["merged_df"] = merged_df
-
-                except Exception as e:
-                    st.error(f"❌ Error during processing: {e}")
-
-    except Exception as e:
-        st.error(f"❌ Failed to read Excel file: {e}")
+            except Exception as e:
+                st.error(f"❌ Error during processing: {e}")
