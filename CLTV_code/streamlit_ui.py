@@ -3,7 +3,6 @@ import os
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from plotly.colors import qualitative
 from input import convert_data_types
 from operations import CustomerAnalytics
 from mapping import auto_map_columns, expected_orders_cols, expected_transaction_cols
@@ -18,7 +17,7 @@ def run_streamlit_app():
     st.set_page_config(page_title="CLTV Dashboard", layout="wide")
     st.title("Customer Lifetime Value Dashboard")
 
-    tab1, tab2, tab3 = st.tabs(["Upload / Load Data", "Insights", "Detailed View"])
+    tab1, tab2, tab3, tab4 = st.tabs(["Upload / Load Data", "Insights", "Detailed View", "Predictions"])
 
     with tab1:
         handle_data_upload()
@@ -31,11 +30,12 @@ def run_streamlit_app():
                 st.session_state['rfm_segmented'],
                 st.session_state['at_risk']
             )
+        with tab4:
+            show_prediction_tab(st.session_state['rfm_segmented'])
     else:
-        with tab2:
-            st.warning("⚠ Please upload or load data first.")
-        with tab3:
-            st.warning("⚠ Please upload or load data first.")
+        for tab in [tab2, tab3, tab4]:
+            with tab:
+                st.warning("⚠ Please upload or load data first.")
 
 def handle_data_upload():
     orders_file = st.file_uploader("Upload Orders CSV", type=["csv"])
@@ -117,54 +117,32 @@ def show_insights():
     revenue_by_segment = rfm_segmented.groupby('segment')['monetary'].sum().reset_index()
     custom_colors = ['#1f77b4', '#2ca02c', '#ff7f0e', '#d62728', '#9467bd']
 
-    # 2x2 layout
+    # 2x2 chart layout
     viz_col1, viz_col2 = st.columns(2)
     with viz_col1:
         st.markdown("#### 🎯 Customer Segment Distribution")
-        fig1 = px.pie(
-            segment_counts,
-            values='Count',
-            names='Segment',
-            hole=0.45,
-            color_discrete_sequence=custom_colors
-        )
+        fig1 = px.pie(segment_counts, values='Count', names='Segment', hole=0.45, color_discrete_sequence=custom_colors)
         fig1.update_traces(textinfo='percent+label', textposition='inside')
         st.plotly_chart(fig1, use_container_width=True)
 
     with viz_col2:
         st.markdown("#### 🧾 Average Order Value by Segment")
-        fig2 = px.bar(
-            aov_by_segment.sort_values(by='aov'),
-            x='aov',
-            y='segment',
-            orientation='h',
-            color='segment',
-            color_discrete_sequence=custom_colors
-        )
+        fig2 = px.bar(aov_by_segment.sort_values(by='aov'), x='aov', y='segment', orientation='h',
+                      color='segment', color_discrete_sequence=custom_colors)
         st.plotly_chart(fig2, use_container_width=True)
 
     viz_col3, viz_col4 = st.columns(2)
     with viz_col3:
         st.markdown("#### 💸 Revenue Contribution by Segment")
-        fig3 = px.bar(
-            revenue_by_segment.sort_values(by='monetary'),
-            x='monetary',
-            y='segment',
-            orientation='h',
-            color='segment',
-            color_discrete_sequence=custom_colors
-        )
+        fig3 = px.bar(revenue_by_segment.sort_values(by='monetary'), x='monetary', y='segment', orientation='h',
+                      color='segment', color_discrete_sequence=custom_colors)
         st.plotly_chart(fig3, use_container_width=True)
 
     with viz_col4:
         st.markdown("#### 🔮 Predicted CLTV Distribution (3-Month)")
-        fig4 = px.histogram(
-            rfm_segmented,
-            x='predicted_cltv_3m',
-            nbins=30,
-            title='CLTV Prediction Distribution',
-            color_discrete_sequence=['#636efa']
-        )
+        fig4 = px.histogram(rfm_segmented, x='predicted_cltv_3m', nbins=30,
+                            title='CLTV Prediction Distribution',
+                            color_discrete_sequence=['#636efa'])
         fig4.update_layout(xaxis_title="Predicted CLTV", yaxis_title="Customer Count")
         st.plotly_chart(fig4, use_container_width=True)
 
@@ -172,7 +150,8 @@ def show_insights():
     st.subheader("📄 Tabular Insights")
 
     st.markdown("#### 🥇 Top 5 Customers by CLTV")
-    st.dataframe(rfm_segmented[['User ID', 'CLTV']].sort_values(by='CLTV', ascending=False).head(5), use_container_width=True)
+    st.dataframe(rfm_segmented[['User ID', 'CLTV']].sort_values(by='CLTV', ascending=False).head(5),
+                 use_container_width=True)
 
     st.markdown("#### 🔥 Top Products Bought by High-Value Customers")
     try:
@@ -188,7 +167,9 @@ def show_insights():
     except Exception as e:
         st.warning(f"⚠️ Could not compute top products: {e}")
 
-    st.markdown("#### 📉 Predicted CLTV (Next 3 Months - BG/NBD + Gamma-Gamma)")
+def show_prediction_tab(rfm_segmented):
+    st.subheader("🔮 Predicted CLTV (Next 3 Months)")
+    st.caption("Forecasted Customer Lifetime Value using BG/NBD + Gamma-Gamma model.")
     st.dataframe(
         rfm_segmented[['User ID', 'predicted_cltv_3m']]
         .sort_values(by='predicted_cltv_3m', ascending=False)
@@ -208,6 +189,6 @@ def show_detailed_view(rfm_segmented, at_risk):
 def has_duplicate_columns(df1, df2):
     return df1.columns.duplicated().any() or df2.columns.duplicated().any()
 
-# To run the app
+# Run the app
 if __name__ == "__main__":
     run_streamlit_app()
