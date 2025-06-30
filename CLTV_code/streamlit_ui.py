@@ -1,22 +1,38 @@
-# streamlit_ui.py
-
 import streamlit as st
 import pandas as pd
 from input import convert_data_types
 from operations import CustomerAnalytics
 from mapping import auto_map_columns, expected_orders_cols, expected_transaction_cols
 
+# Sample file paths (you can change this folder name if needed)
+SAMPLE_ORDER_PATH = "sample_data/Orders.csv"
+SAMPLE_TRANS_PATH = "sample_data/Transactional.csv"
+
 def run_streamlit_app():
     st.set_page_config(page_title="CLTV Dashboard", layout="wide")
     st.title("Customer Lifetime Value Dashboard")
 
+    # Upload section
     orders_file = st.file_uploader("Upload Orders CSV", type=["csv"])
     transactions_file = st.file_uploader("Upload Transactions CSV", type=["csv"])
+
+    df_orders = df_transactions = None
 
     if orders_file and transactions_file:
         df_orders = pd.read_csv(orders_file)
         df_transactions = pd.read_csv(transactions_file)
 
+    elif st.button("🚀 Use Sample Data Instead"):
+        try:
+            df_orders = pd.read_csv(SAMPLE_ORDER_PATH)
+            df_transactions = pd.read_csv(SAMPLE_TRANS_PATH)
+            st.success("✅ Sample data loaded successfully!")
+        except FileNotFoundError:
+            st.error("❌ Sample files not found in 'sample_data/' folder.")
+            return
+
+    # Proceed only if data is available
+    if df_orders is not None and df_transactions is not None:
         if has_duplicate_columns(df_orders, df_transactions):
             st.error("Duplicate column names detected.")
             return
