@@ -11,10 +11,6 @@ from cltv_model import fit_bgf_ggf  # Added predictive model
 BASE_DIR = os.path.dirname(__file__)  # gets the path of the current script
 SAMPLE_ORDER_PATH = os.path.join(BASE_DIR, "sample_data", "Orders.csv")
 SAMPLE_TRANS_PATH = os.path.join(BASE_DIR, "sample_data", "Transactional.csv")
-<<<<<<< HEAD
-
-=======
->>>>>>> eaacd5fbe2dc98cf305b07c3325ab9fe17dd35f2
 
 def run_streamlit_app():
     st.set_page_config(page_title="CLTV Dashboard", layout="wide")
