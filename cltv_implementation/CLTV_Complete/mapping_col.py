@@ -1,16 +1,21 @@
 import streamlit as st
 import pandas as pd
+import os
 from operations import Customer_level, Rfm_segment
 from utils.file_input import handle_file_uploads
 from utils.column_mapping import auto_map_columns
 from utils.display_helpers import display_file_summary
 from pipeline.processor import run_data_pipeline
 
+# -------------------------------
 # Streamlit App Configuration
+# -------------------------------
 st.set_page_config(page_title="Upload Transactional and Order Data", layout="wide")
-st.title("\U0001F4E5 Upload Transactional and Order Data")
+st.title("📥 Upload Transactional and Order Data")
 
+# -------------------------------
 # Expected Column Definitions
+# -------------------------------
 target_orders_cols = {
     "Transaction ID": ["Transaction ID", "transaction_id"],
     "Order ID": ["Order ID", "order_id"],
@@ -36,11 +41,67 @@ target_transaction_cols = {
     "Total Amount": ["Total Payable", "total_payable", "amount_payable", "Total_amount"]
 }
 
-# Upload Files
+# -------------------------------
+# Optional Reset Button
+# -------------------------------
+if st.button("🔄 Reset Data and Re-Upload"):
+    for key in ["orders_df", "transactions_df", "customer_df", "raw_orders_df", "raw_transactions_df"]:
+        st.session_state.pop(key, None)
+    st.rerun()
+
+# -------------------------------
+# Sample Data Trigger
+# -------------------------------
+if st.button("🔍 Try Sample Data Instead"):
+    try:
+        sample_orders = pd.read_csv("test_data/Orders.csv")
+        sample_transactions = pd.read_csv("test_data/Transactional.csv")
+
+        st.session_state["raw_orders_df"] = sample_orders
+        st.session_state["raw_transactions_df"] = sample_transactions
+
+        orders_mappings = auto_map_columns(sample_orders, target_orders_cols)
+        trans_mappings = auto_map_columns(sample_transactions, target_transaction_cols)
+
+        processed_orders, processed_trans, customer_segmented = run_data_pipeline(
+            sample_orders, sample_transactions, orders_mappings, trans_mappings
+        )
+
+        st.session_state["orders_df"] = processed_orders
+        st.session_state["transactions_df"] = processed_trans
+        st.session_state["customer_df"] = customer_segmented
+
+        st.success("✅ Sample data loaded and processed!")
+        st.info("➡️ Go to the Detailed View page from the sidebar.")
+
+        st.rerun()
+
+    except Exception as e:
+        st.error(f"❌ Failed to load sample data: {e}")
+
+# -------------------------------
+# If already processed, show info
+# -------------------------------
+if "customer_df" in st.session_state:
+    st.success("✅ Data already processed!")
+    st.info("➡️ You can go directly to the Detailed View page from the sidebar.")
+
+    if "raw_orders_df" in st.session_state and "raw_transactions_df" in st.session_state:
+        st.markdown("### 📊 Uploaded File Overview")
+        display_file_summary(st.session_state["raw_orders_df"], "Orders")
+        display_file_summary(st.session_state["raw_transactions_df"], "Transactions")
+    st.stop()
+
+# -------------------------------
+# Upload from User
+# -------------------------------
 orders_df, transactions_df = handle_file_uploads()
 
 if orders_df is not None and transactions_df is not None:
-    st.markdown("### \U0001F4CA Uploaded File Overview")
+    st.session_state["raw_orders_df"] = orders_df
+    st.session_state["raw_transactions_df"] = transactions_df
+
+    st.markdown("### 📊 Uploaded File Overview")
     display_file_summary(orders_df, "Orders")
     display_file_summary(transactions_df, "Transactions")
 
@@ -90,8 +151,7 @@ if orders_df is not None and transactions_df is not None:
                 st.session_state["customer_df"] = customer_segmented
 
                 st.success("🎉 Data processed and mapped successfully!")
-                st.subheader("🧍‍♂️ Customer-Level Features with RFM Segmentation")
-                st.dataframe(customer_segmented.head(), use_container_width=True)
+                st.info("➡️ Go to the Detailed View page from the sidebar to see insights.")
 
             except Exception as e:
                 st.error(f"❌ Error during processing: {e}")
