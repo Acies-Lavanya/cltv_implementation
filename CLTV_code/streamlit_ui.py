@@ -8,8 +8,10 @@ from mapping import auto_map_columns, expected_orders_cols, expected_transaction
 from cltv_model import fit_bgf_ggf  # Added predictive model
 
 # Sample file paths
-SAMPLE_ORDER_PATH = os.path.join("sample_data", "Orders.csv")
-SAMPLE_TRANS_PATH = os.path.join("sample_data", "Transactional.csv")
+BASE_DIR = os.path.dirname(__file__)  # gets the path of the current script
+SAMPLE_ORDER_PATH = os.path.join(BASE_DIR, "sample_data", "Orders.csv")
+SAMPLE_TRANS_PATH = os.path.join(BASE_DIR, "sample_data", "Transactional.csv")
+
 
 def run_streamlit_app():
     st.set_page_config(page_title="CLTV Dashboard", layout="wide")
@@ -102,7 +104,9 @@ def show_insights():
     col1, col2, col3 = st.columns(3)
     col1.metric("Total Customers", len(rfm_segmented))
     col2.metric("High Value Customers", (rfm_segmented['segment'] == 'High').sum())
-    col3.metric("Customers at Risk", len(at_risk))
+    col3.metric("Customers at Risk*", len(at_risk))
+    st.caption("📌 *Customers at Risk* refers to users whose **Recency > 90 days**, indicating potential churn risk.")
+
 
     st.subheader("🏆 Top 5 Customers by CLTV (Lifetime)")
     st.dataframe(rfm_segmented[['User ID', 'CLTV']].sort_values(by='CLTV', ascending=False).head(5))
