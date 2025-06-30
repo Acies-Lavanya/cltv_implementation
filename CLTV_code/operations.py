@@ -1,5 +1,3 @@
-# operations.py
-
 import pandas as pd
 
 class CustomerAnalytics:
@@ -21,6 +19,24 @@ class CustomerAnalytics:
             (customer_level['last_purchase'] - customer_level['first_purchase']).dt.days / 
             (customer_level['frequency'] - 1), 0
         ).fillna(-1).astype(int)
+
+        # Lifespan metrics
+        customer_level['lifespan_1d'] = (customer_level['last_purchase'] - customer_level['first_purchase']).dt.days + 1
+        customer_level['lifespan_7d'] = round(customer_level['lifespan_1d'] / 7, 2)
+        customer_level['lifespan_15d'] = round(customer_level['lifespan_1d'] / 15, 2)
+        customer_level['lifespan_30d'] = round(customer_level['lifespan_1d'] / 30, 2)
+        customer_level['lifespan_60d'] = round(customer_level['lifespan_1d'] / 60, 2)
+        customer_level['lifespan_90d'] = round(customer_level['lifespan_1d'] / 90, 2)
+        
+
+        # Time-normalized CLTV
+        customer_level['CLTV_1d'] = round(customer_level['monetary'] / customer_level['lifespan_1d'].replace(0, 1), 2)
+        customer_level['CLTV_7d'] = round(customer_level['monetary'] / customer_level['lifespan_7d'].replace(0, 0.1), 2)
+        customer_level['CLTV_15d'] = round(customer_level['monetary'] / customer_level['lifespan_15d'].replace(0, 0.1), 2)
+        customer_level['CLTV_30d'] = round(customer_level['monetary'] / customer_level['lifespan_30d'].replace(0, 0.1), 2)
+        customer_level['CLTV_60d'] = round(customer_level['monetary'] / customer_level['lifespan_60d'].replace(0, 0.1), 2)
+        customer_level['CLTV_90d'] = round(customer_level['monetary'] / customer_level['lifespan_90d'].replace(0, 0.1), 2)
+        customer_level['CLTV_total'] = customer_level['monetary']
 
         return customer_level
 
@@ -45,12 +61,10 @@ class CustomerAnalytics:
 
         customer_level['segment'] = customer_level['RFM_score'].apply(assign_segment)
         return customer_level
-    
+
     def calculate_cltv(self, df):
         df['CLTV'] = df['aov'] * df['frequency']
         return df
 
     def customers_at_risk(self, customer_level, threshold_days=90):
         return customer_level[customer_level['recency'] > threshold_days]
-    
-    
