@@ -8,8 +8,9 @@ from mapping import auto_map_columns, expected_orders_cols, expected_transaction
 from cltv_model import fit_bgf_ggf  # Added predictive model
 
 # Sample file paths
-SAMPLE_ORDER_PATH = os.path.join("sample_data", "Orders.csv")
-SAMPLE_TRANS_PATH = os.path.join("sample_data", "Transactional.csv")
+BASE_DIR = os.path.dirname(__file__)  # gets the path of the current script
+SAMPLE_ORDER_PATH = os.path.join(BASE_DIR, "sample_data", "Orders.csv")
+SAMPLE_TRANS_PATH = os.path.join(BASE_DIR, "sample_data", "Transactional.csv")
 
 def run_streamlit_app():
     st.set_page_config(page_title="CLTV Dashboard", layout="wide")
