@@ -1,0 +1,56 @@
+# operations.py
+
+import pandas as pd
+
+class CustomerAnalytics:
+    def __init__(self, transaction_df):
+        self.df = transaction_df.copy()
+        self.today = self.df['Purchase Date'].max() + pd.Timedelta(days=1)
+
+    def compute_customer_level(self):
+        customer_level = self.df.groupby('User ID').agg(
+            recency=('Purchase Date', lambda x: (self.today - x.max()).days),
+            frequency=('Purchase Date', 'count'),
+            monetary=('Total Amount', 'sum'),
+            last_purchase=('Purchase Date', 'max'),
+            first_purchase=('Purchase Date', 'min')
+        ).reset_index()
+
+        customer_level['aov'] = round(customer_level['monetary'] / customer_level['frequency'], 2)
+        customer_level['avg_days_between_orders'] = round(
+            (customer_level['last_purchase'] - customer_level['first_purchase']).dt.days / 
+            (customer_level['frequency'] - 1), 0
+        ).fillna(-1).astype(int)
+
+        return customer_level
+
+    def rfm_segmentation(self, customer_level):
+        customer_level['R_score'] = pd.qcut(customer_level['recency'], 5, labels=[5, 4, 3, 2, 1]).astype(int)
+        customer_level['F_score'] = pd.qcut(customer_level['frequency'].rank(method='first'), 5, labels=[1, 2, 3, 4, 5]).astype(int)
+        customer_level['M_score'] = pd.qcut(customer_level['monetary'], 5, labels=[1, 2, 3, 4, 5]).astype(int)
+
+        customer_level['RFM_score'] = customer_level['R_score'] + customer_level['F_score'] + customer_level['M_score']
+        customer_level['RFM'] = customer_level['R_score'].astype(str) + customer_level['F_score'].astype(str) + customer_level['M_score'].astype(str)
+
+        q1 = customer_level['RFM_score'].quantile(0.33)
+        q2 = customer_level['RFM_score'].quantile(0.66)
+
+        def assign_segment(score):
+            if score <= q1:
+                return 'Low'
+            elif score <= q2:
+                return 'Medium'
+            else:
+                return 'High'
+
+        customer_level['segment'] = customer_level['RFM_score'].apply(assign_segment)
+        return customer_level
+    
+    def calculate_cltv(self, df):
+        df['CLTV'] = df['aov'] * df['frequency']
+        return df
+
+    def customers_at_risk(self, customer_level, threshold_days=90):
+        return customer_level[customer_level['recency'] > threshold_days]
+    
+    
