@@ -4,7 +4,6 @@ from input import convert_data_types
 from operations import CustomerAnalytics
 from mapping import auto_map_columns, expected_orders_cols, expected_transaction_cols
 
-# Sample file paths
 SAMPLE_ORDER_PATH = "sample_data/Orders.csv"
 SAMPLE_TRANS_PATH = "sample_data/Transactional.csv"
 
@@ -12,32 +11,48 @@ def run_streamlit_app():
     st.set_page_config(page_title="CLTV Dashboard", layout="wide")
     st.title("Customer Lifetime Value Dashboard")
 
-    # Upload section
+    tab1, tab2, tab3 = st.tabs(["Upload / Load Data", "Insights", "Detailed View"])
+
+    with tab1:
+        handle_data_upload()
+
+    if data_ready():
+        with tab2:
+            show_insights()
+        with tab3:
+            show_detailed_view(st.session_state['rfm_segmented'], st.session_state['at_risk'])
+    else:
+        with tab2:
+            st.warning("⚠ Please upload or load data first.")
+        with tab3:
+            st.warning("⚠ Please upload or load data first.")
+
+def handle_data_upload():
     orders_file = st.file_uploader("Upload Orders CSV", type=["csv"])
     transactions_file = st.file_uploader("Upload Transactions CSV", type=["csv"])
 
-    df_orders = df_transactions = None
-
     if orders_file and transactions_file:
-        df_orders = pd.read_csv(orders_file)
-        df_transactions = pd.read_csv(transactions_file)
-        st.success("✅ Uploaded files loaded!")
-
+        st.session_state['orders_file'] = orders_file
+        st.session_state['transactions_file'] = transactions_file
+        st.session_state['use_sample'] = False
+        process_data()
     elif st.button("🚀 Use Sample Data Instead"):
-        try:
+        st.session_state['use_sample'] = True
+        process_data()
+
+def process_data():
+    try:
+        if st.session_state.get('use_sample'):
             df_orders = pd.read_csv(SAMPLE_ORDER_PATH)
             df_transactions = pd.read_csv(SAMPLE_TRANS_PATH)
-            st.success("✅ Sample data loaded successfully!")
-        except FileNotFoundError:
-            st.error("❌ Sample files not found.")
-            return
+        else:
+            df_orders = pd.read_csv(st.session_state['orders_file'])
+            df_transactions = pd.read_csv(st.session_state['transactions_file'])
 
-    if df_orders is not None and df_transactions is not None:
         if has_duplicate_columns(df_orders, df_transactions):
             st.error("❌ Duplicate column names detected.")
             return
 
-        # Auto mapping
         orders_mapping = auto_map_columns(df_orders, expected_orders_cols)
         trans_mapping = auto_map_columns(df_transactions, expected_transaction_cols)
 
@@ -51,55 +66,57 @@ def run_streamlit_app():
         rfm_segmented = analytics.calculate_cltv(rfm_segmented)
         at_risk = analytics.customers_at_risk(customer_level)
 
-        st.session_state['rfm_segmented'] = rfm_segmented
-        st.session_state['at_risk'] = at_risk
         st.session_state['df_orders'] = df_orders
         st.session_state['df_transactions'] = df_transactions
+        st.session_state['rfm_segmented'] = rfm_segmented
+        st.session_state['at_risk'] = at_risk
 
-    # Insights page
-    if 'rfm_segmented' in st.session_state and 'at_risk' in st.session_state:
-        rfm_segmented = st.session_state['rfm_segmented']
-        at_risk = st.session_state['at_risk']
-        df_orders = st.session_state['df_orders']
-        df_transactions = st.session_state['df_transactions']
+        st.success("✅ Data processed successfully!")
 
-        st.subheader("Key Insights")
-        col1, col2, col3 = st.columns(3)
-        col1.metric("Total Customers", len(rfm_segmented))
-        col2.metric("High Value Customers", (rfm_segmented['segment'] == 'High').sum())
-        col3.metric("Customers at Risk", len(at_risk))
+    except Exception as e:
+        st.error(f"❌ Error during processing: {e}")
 
-        st.subheader("Top 5 Customers by CLTV")
-        st.dataframe(rfm_segmented[['User ID', 'CLTV']].sort_values(by='CLTV', ascending=False).head(5))
+def data_ready():
+    keys = ['df_orders', 'df_transactions', 'rfm_segmented', 'at_risk']
+    return all(k in st.session_state and st.session_state[k] is not None for k in keys)
 
-        st.subheader("Customer Segment Distribution")
-        st.bar_chart(rfm_segmented['segment'].value_counts())
+def show_insights():
+    rfm_segmented = st.session_state['rfm_segmented']
+    at_risk = st.session_state['at_risk']
+    df_orders = st.session_state['df_orders']
+    df_transactions = st.session_state['df_transactions']
 
-        st.subheader("Average Order Value by Segment")
-        st.bar_chart(rfm_segmented.groupby('segment')['aov'].mean())
+    st.subheader("Key Insights")
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Total Customers", len(rfm_segmented))
+    col2.metric("High Value Customers", (rfm_segmented['segment'] == 'High').sum())
+    col3.metric("Customers at Risk", len(at_risk))
 
-        st.subheader("Revenue Contribution by Segment")
-        st.bar_chart(rfm_segmented.groupby('segment')['monetary'].sum())
+    st.subheader("Top 5 Customers by CLTV")
+    st.dataframe(rfm_segmented[['User ID', 'CLTV']].sort_values(by='CLTV', ascending=False).head(5))
 
-        st.subheader("Top Products Bought by High-Value Customers")
-        try:
-            high_value_users = rfm_segmented[rfm_segmented['segment'] == 'High']['User ID']
-            top_products = df_orders[df_orders['Transaction ID'].isin(
-                df_transactions[df_transactions['User ID'].isin(high_value_users)]['Transaction ID']
-            )].groupby('Product ID')['Quantity'].sum().sort_values(ascending=False).head(5)
+    st.subheader("Customer Segment Distribution")
+    st.bar_chart(rfm_segmented['segment'].value_counts())
 
-            if not top_products.empty:
-                st.dataframe(top_products.reset_index())
-            else:
-                st.info("✅ No top products found for high-value customers.")
-        except Exception as e:
-            st.warning(f"⚠️ Could not compute top products: {e}")
+    st.subheader("Average Order Value by Segment")
+    st.bar_chart(rfm_segmented.groupby('segment')['aov'].mean())
 
-        # Debug: Recency stats (optional)
-        # st.write("Recency stats", rfm_segmented['recency'].describe())
+    st.subheader("Revenue Contribution by Segment")
+    st.bar_chart(rfm_segmented.groupby('segment')['monetary'].sum())
 
-        if st.button("View Detailed Process"):
-            show_detailed_view(rfm_segmented, at_risk)
+    st.subheader("Top Products Bought by High-Value Customers")
+    try:
+        high_value_users = rfm_segmented[rfm_segmented['segment'] == 'High']['User ID']
+        top_products = df_orders[df_orders['Transaction ID'].isin(
+            df_transactions[df_transactions['User ID'].isin(high_value_users)]['Transaction ID']
+        )].groupby('Product ID')['Quantity'].sum().sort_values(ascending=False).head(5)
+
+        if not top_products.empty:
+            st.dataframe(top_products.reset_index())
+        else:
+            st.info("✅ No top products found for high-value customers.")
+    except Exception as e:
+        st.warning(f"⚠️ Could not compute top products: {e}")
 
 def show_detailed_view(rfm_segmented, at_risk):
     st.subheader("Full RFM Segmented Data with CLTV")
