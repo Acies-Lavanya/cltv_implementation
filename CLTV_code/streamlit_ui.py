@@ -15,7 +15,13 @@ def run_streamlit_app():
     st.set_page_config(page_title="CLTV Dashboard", layout="wide")
     st.title("Customer Lifetime Value Dashboard")
 
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(["Upload / Load Data", "Insights", "Detailed View", "Predictions", "Realization Curve"])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+        "Upload / Load Data",
+        "Insights",
+        "Detailed View",
+        "Predictions",
+        "Realization Curve"
+    ])
 
     with tab1:
         handle_data_upload()
@@ -139,6 +145,54 @@ def show_insights():
     fig2.update_layout(title=f"{y_title} by Segment", xaxis_title=y_title)
     st.plotly_chart(fig2, use_container_width=True)
 
+    # 🛍️ Top Products by Segment
+    st.divider()
+    st.markdown("#### 🛍️ Top Products Bought by Segment Customers")
+
+    try:
+        selected_segment = st.selectbox("Choose a Customer Segment", options=['High', 'Medium', 'Low'], index=0)
+        segment_users = rfm_segmented[rfm_segmented['segment'] == selected_segment]['User ID']
+        segment_transaction_ids = df_transactions[df_transactions['User ID'].isin(segment_users)]['Transaction ID']
+
+        orders = df_orders.rename(columns=lambda x: x.strip().lower().replace(" ", "_"))
+        if 'unit_price' in orders.columns:
+            orders.rename(columns={'unit_price': 'unitprice'}, inplace=True)
+
+        required_cols = {'transaction_id', 'product_id', 'quantity', 'unitprice'}
+        if not required_cols.issubset(set(orders.columns)):
+            st.warning(f"⚠️ Required columns not found: {required_cols}")
+            st.write("Found columns:", orders.columns.tolist())
+        else:
+            filtered_orders = orders[orders['transaction_id'].isin(segment_transaction_ids)].copy()
+            filtered_orders['revenue'] = filtered_orders['quantity'] * filtered_orders['unitprice']
+
+            top_products = (
+                filtered_orders.groupby('product_id')
+                .agg(Total_Quantity=('quantity', 'sum'), Total_Revenue=('revenue', 'sum'))
+                .sort_values(by='Total_Revenue', ascending=False)
+                .head(5)
+                .reset_index()
+            )
+
+            if not top_products.empty:
+                st.markdown(f"#### 📦 Top 5 Products by Revenue for '{selected_segment}' Segment")
+                fig_products = px.bar(
+                    top_products,
+                    x='product_id',
+                    y='Total_Revenue',
+                    text='Total_Revenue',
+                    labels={'product_id': 'Product ID', 'Total_Revenue': 'Revenue'},
+                    color='product_id',
+                    color_discrete_sequence=custom_colors[:5]
+                )
+                fig_products.update_traces(texttemplate='₹%{text:.2f}', textposition='outside')
+                fig_products.update_layout(yaxis_title="Total Revenue", xaxis_title="Product ID")
+                st.plotly_chart(fig_products, use_container_width=True)
+            else:
+                st.info("✅ No products found for this segment.")
+    except Exception as e:
+        st.warning(f"⚠️ Could not compute top products: {e}")
+
 def show_prediction_tab(rfm_segmented):
     st.subheader("🔮 Predicted CLTV (Next 3 Months)")
     st.caption("Forecasted Customer Lifetime Value using BG/NBD + Gamma-Gamma model.")
@@ -164,8 +218,6 @@ def show_realization_curve(df_orders):
     try:
         df = df_orders.copy()
         df.columns = [c.strip().lower().replace(" ", "_") for c in df.columns]
-
-        # Rename for consistency
         if 'unit_price' in df.columns:
             df.rename(columns={'unit_price': 'unitprice'}, inplace=True)
 
@@ -185,7 +237,7 @@ def show_realization_curve(df_orders):
         for days in intervals:
             cutoff = start_date + pd.Timedelta(days=days)
             cum_revenue = df[df['order_date'] <= cutoff]['revenue'].sum()
-            cltv = cum_revenue / 292  # fixed user count
+            cltv = cum_revenue / 292  # fixed distinct user count
             cltv_values.append(round(cltv, 2))
 
         chart_df = pd.DataFrame({
@@ -199,7 +251,6 @@ def show_realization_curve(df_orders):
 
     except Exception as e:
         st.error(f"Could not generate CLTV curve: {e}")
-
 
 def has_duplicate_columns(df1, df2):
     return df1.columns.duplicated().any() or df2.columns.duplicated().any()
