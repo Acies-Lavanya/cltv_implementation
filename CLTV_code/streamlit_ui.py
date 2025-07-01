@@ -16,11 +16,7 @@ def run_streamlit_app():
     st.title("Customer Lifetime Value Dashboard")
 
     tab1, tab2, tab3, tab4, tab5 = st.tabs([
-        "Upload / Load Data",
-        "Insights",
-        "Detailed View",
-        "Predictions",
-        "Realization Curve"
+        "Upload / Load Data", "Insights", "Detailed View", "Predictions", "Realization Curve"
     ])
 
     with tab1:
@@ -34,7 +30,7 @@ def run_streamlit_app():
         with tab4:
             show_prediction_tab(st.session_state['rfm_segmented'])
         with tab5:
-            show_realization_curve(st.session_state['df_orders'])
+            show_realization_curve(st.session_state['df_orders'], st.session_state['rfm_segmented'])
     else:
         for tab in [tab2, tab3, tab4, tab5]:
             with tab:
@@ -72,6 +68,16 @@ def process_data():
         df_orders = df_orders.rename(columns={v: k for k, v in orders_mapping.items()})
         df_transactions = df_transactions.rename(columns={v: k for k, v in trans_mapping.items()})
         df_orders, df_transactions = convert_data_types(df_orders, df_transactions)
+
+        # Merge user_id into df_orders based on transaction_id
+        if 'Transaction ID' in df_transactions.columns and 'Transaction ID' in df_orders.columns:
+            df_orders = df_orders.merge(
+                df_transactions[['Transaction ID', 'User ID']],
+                on='Transaction ID',
+                how='left'
+            )
+        else:
+            st.warning("Transaction ID not found in both orders and transactions.")
 
         analytics = CustomerAnalytics(df_transactions)
         customer_level = analytics.compute_customer_level()
@@ -142,13 +148,11 @@ def show_insights():
     fig2 = px.bar(metric_data.sort_values(by='value'), x='value', y='segment', orientation='h',
                   labels={'value': y_title}, color='segment', color_discrete_sequence=custom_colors, text='value')
     fig2.update_traces(texttemplate='%{text:.2f}', textposition='outside')
-    fig2.update_layout(title=f"{y_title} by Segment", xaxis_title=y_title)
     st.plotly_chart(fig2, use_container_width=True)
 
     # 🛍️ Top Products by Segment
     st.divider()
     st.markdown("#### 🛍️ Top Products Bought by Segment Customers")
-
     try:
         selected_segment = st.selectbox("Choose a Customer Segment", options=['High', 'Medium', 'Low'], index=0)
         segment_users = rfm_segmented[rfm_segmented['segment'] == selected_segment]['User ID']
@@ -186,7 +190,6 @@ def show_insights():
                     color_discrete_sequence=custom_colors[:5]
                 )
                 fig_products.update_traces(texttemplate='₹%{text:.2f}', textposition='outside')
-                fig_products.update_layout(yaxis_title="Total Revenue", xaxis_title="Product ID")
                 st.plotly_chart(fig_products, use_container_width=True)
             else:
                 st.info("✅ No products found for this segment.")
@@ -200,8 +203,7 @@ def show_prediction_tab(rfm_segmented):
         rfm_segmented[['User ID', 'predicted_cltv_3m']]
         .sort_values(by='predicted_cltv_3m', ascending=False)
         .reset_index(drop=True)
-        .style.format({'predicted_cltv_3m': '₹{:,.2f}'}),
-        use_container_width=True
+        .style.format({'predicted_cltv_3m': '₹{:,.2f}'}), use_container_width=True
     )
 
 def show_detailed_view(rfm_segmented, at_risk):
@@ -212,33 +214,53 @@ def show_detailed_view(rfm_segmented, at_risk):
     st.caption("These are customers whose last purchase was over 90 days ago and may be at risk of churning.")
     st.dataframe(at_risk)
 
-def show_realization_curve(df_orders):
+def show_realization_curve(df_orders, rfm_segmented):
     st.subheader("📈 Realization Curve of CLTV Over Time")
-
     try:
         df = df_orders.copy()
         df.columns = [c.strip().lower().replace(" ", "_") for c in df.columns]
         if 'unit_price' in df.columns:
             df.rename(columns={'unit_price': 'unitprice'}, inplace=True)
+        if 'user_id' not in df.columns and 'user id' in df.columns:
+            df.rename(columns={'user id': 'user_id'}, inplace=True)
 
-        required_cols = {'order_date', 'quantity', 'unitprice'}
+        required_cols = {'order_date', 'quantity', 'unitprice', 'user_id'}
         if not required_cols.issubset(set(df.columns)):
-            st.warning(f"⚠️ Required columns not found even after renaming: {required_cols}")
+            st.warning(f"⚠️ Required columns not found: {required_cols}")
             st.write("Found columns:", df.columns.tolist())
             return
 
         df['order_date'] = pd.to_datetime(df['order_date'])
         df['revenue'] = df['quantity'] * df['unitprice']
 
-        start_date = df['order_date'].min()
+        segment_option = st.selectbox("Select Customer Group for CLTV Curve",
+                                      options=["Overall", "High CLTV Users", "Mid CLTV Users", "Low CLTV Users"])
+
+        if segment_option == "High CLTV Users":
+            selected_users = rfm_segmented[rfm_segmented['segment'] == 'High']['User ID']
+        elif segment_option == "Mid CLTV Users":
+            selected_users = rfm_segmented[rfm_segmented['segment'] == 'Medium']['User ID']
+        elif segment_option == "Low CLTV Users":
+            selected_users = rfm_segmented[rfm_segmented['segment'] == 'Low']['User ID']
+        else:
+            selected_users = df['user_id'].unique()
+
+        filtered_df = df[df['user_id'].isin(selected_users)]
+        user_count = filtered_df['user_id'].nunique()
+
+        if user_count == 0:
+            st.warning("⚠️ No users found in this segment.")
+            return
+
+        start_date = filtered_df['order_date'].min()
         intervals = [15, 30, 45, 60, 90]
         cltv_values = []
 
         for days in intervals:
             cutoff = start_date + pd.Timedelta(days=days)
-            cum_revenue = df[df['order_date'] <= cutoff]['revenue'].sum()
-            cltv = cum_revenue / 292  # fixed distinct user count
-            cltv_values.append(round(cltv, 2))
+            revenue = filtered_df[filtered_df['order_date'] <= cutoff]['revenue'].sum()
+            avg_cltv = revenue / user_count
+            cltv_values.append(round(avg_cltv, 2))
 
         chart_df = pd.DataFrame({
             "Period (Days)": intervals,
@@ -246,7 +268,7 @@ def show_realization_curve(df_orders):
         })
 
         fig = px.line(chart_df, x="Period (Days)", y="Avg CLTV per User", markers=True)
-        fig.update_layout(title="CLTV Realization Curve", xaxis_title="Time (Days)", yaxis_title="Avg CLTV per User")
+        fig.update_layout(title=f"CLTV Realization Curve - {segment_option}", xaxis_title="Days", yaxis_title="Avg CLTV")
         st.plotly_chart(fig, use_container_width=True)
 
     except Exception as e:
