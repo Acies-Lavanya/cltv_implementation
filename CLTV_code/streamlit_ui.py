@@ -114,7 +114,6 @@ def show_insights():
     # Prepare data
     segment_counts = rfm_segmented['segment'].value_counts().reset_index()
     segment_counts.columns = ['Segment', 'Count']
-    revenue_by_segment = rfm_segmented.groupby('segment')['monetary'].sum().reset_index()
     custom_colors = ['#1f77b4', '#2ca02c', '#ff7f0e', '#d62728', '#9467bd']
 
     # First row: Segment Distribution and CLTV Prediction
@@ -167,29 +166,15 @@ def show_insights():
 
     st.divider()
 
-    # st.markdown("#### 🥇 Top 5 Customers by CLTV")
-    # st.dataframe(rfm_segmented[['User ID', 'CLTV']].sort_values(by='CLTV', ascending=False).head(5),
-    #              use_container_width=True)
-
     st.markdown("#### Top Products Bought by Segment Customers")
 
     try:
-        # Segment selection
         selected_segment = st.selectbox("Choose a Customer Segment", options=['High', 'Medium', 'Low'], index=0)
-
-        # Get users from selected segment
         segment_users = rfm_segmented[rfm_segmented['segment'] == selected_segment]['User ID']
         segment_transaction_ids = df_transactions[df_transactions['User ID'].isin(segment_users)]['Transaction ID']
 
-        # Normalize and map columns
         orders = df_orders.rename(columns=lambda x: x.strip().lower().replace(" ", "_"))
-        orders.rename(columns={
-            'unitprice': 'unit_price',
-            'unit_price': 'unit_price',
-        }, inplace=True)
-
-        # Debug: show current column names
-        # st.write("🧪 Orders columns:", orders.columns.tolist())
+        orders.rename(columns={'unitprice': 'unit_price'}, inplace=True)
 
         required_cols = ['transaction_id', 'product_id', 'quantity', 'unit_price']
         missing_cols = [col for col in required_cols if col not in orders.columns]
@@ -205,10 +190,21 @@ def show_insights():
             ).sort_values(by='Total_Revenue', ascending=False).head(5).reset_index()
 
             if not top_products.empty:
-                st.dataframe(top_products.rename(columns={'product_id': 'Product ID'}), use_container_width=True)
+                st.markdown(f"#### 📦 Top 5 Products by Revenue for '{selected_segment}' Segment")
+                fig_products = px.bar(
+                    top_products,
+                    x='product_id',
+                    y='Total_Revenue',
+                    text='Total_Revenue',
+                    labels={'product_id': 'Product ID', 'Total_Revenue': 'Revenue'},
+                    color='product_id',
+                    color_discrete_sequence=custom_colors[:5]
+                )
+                fig_products.update_traces(texttemplate='₹%{text:.2f}', textposition='outside')
+                fig_products.update_layout(yaxis_title="Total Revenue", xaxis_title="Product ID")
+                st.plotly_chart(fig_products, use_container_width=True)
             else:
                 st.info("✅ No products found for this segment.")
-
     except Exception as e:
         st.warning(f"⚠️ Could not compute product stats: {e}")
 
