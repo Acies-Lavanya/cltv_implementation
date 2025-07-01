@@ -3,6 +3,7 @@ import os
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 from input import convert_data_types
 from operations import CustomerAnalytics
 from mapping import auto_map_columns, expected_orders_cols, expected_transaction_cols
@@ -113,11 +114,10 @@ def show_insights():
     # Prepare data
     segment_counts = rfm_segmented['segment'].value_counts().reset_index()
     segment_counts.columns = ['Segment', 'Count']
-    aov_by_segment = rfm_segmented.groupby('segment')['aov'].mean().reset_index()
     revenue_by_segment = rfm_segmented.groupby('segment')['monetary'].sum().reset_index()
     custom_colors = ['#1f77b4', '#2ca02c', '#ff7f0e', '#d62728', '#9467bd']
 
-    # 2x2 chart layout
+    # First row: Segment Distribution and CLTV Prediction
     viz_col1, viz_col2 = st.columns(2)
     with viz_col1:
         st.markdown("#### 🎯 Customer Segment Distribution")
@@ -126,46 +126,91 @@ def show_insights():
         st.plotly_chart(fig1, use_container_width=True)
 
     with viz_col2:
-        st.markdown("#### 🧾 Average Order Value by Segment")
-        fig2 = px.bar(aov_by_segment.sort_values(by='aov'), x='aov', y='segment', orientation='h',
-                      color='segment', color_discrete_sequence=custom_colors)
-        st.plotly_chart(fig2, use_container_width=True)
-
-    viz_col3, viz_col4 = st.columns(2)
-    with viz_col3:
-        st.markdown("#### 💸 Revenue Contribution by Segment")
-        fig3 = px.bar(revenue_by_segment.sort_values(by='monetary'), x='monetary', y='segment', orientation='h',
-                      color='segment', color_discrete_sequence=custom_colors)
-        st.plotly_chart(fig3, use_container_width=True)
-
-    with viz_col4:
         st.markdown("#### 🔮 Predicted CLTV Distribution (3-Month)")
-        fig4 = px.histogram(rfm_segmented, x='predicted_cltv_3m', nbins=30,
-                            title='CLTV Prediction Distribution',
-                            color_discrete_sequence=['#636efa'])
+        fig4 = px.histogram(
+            rfm_segmented, x='predicted_cltv_3m', nbins=30,
+            title='CLTV Prediction Distribution',
+            color_discrete_sequence=['#636efa']
+        )
         fig4.update_layout(xaxis_title="Predicted CLTV", yaxis_title="Customer Count")
         st.plotly_chart(fig4, use_container_width=True)
 
+    # Full-width: Segment-wise Average Metrics
+    st.markdown("#### 📊 Segment-wise Average Metrics")
+    metric_option = st.selectbox(
+        "Choose Metric to Display",
+        options=["AOV", "Average CLTV"],
+        index=0,
+        key="segment_metric_selector"
+    )
+
+    if metric_option == "AOV":
+        metric_data = rfm_segmented.groupby("segment")['aov'].mean().reset_index().rename(columns={"aov": "value"})
+        y_title = "Average Order Value"
+    else:
+        metric_data = rfm_segmented.groupby("segment")['CLTV'].mean().reset_index().rename(columns={"CLTV": "value"})
+        y_title = "Average CLTV"
+
+    fig2 = px.bar(
+        metric_data.sort_values(by='value'),
+        x='value',
+        y='segment',
+        orientation='h',
+        labels={'value': y_title},
+        color='segment',
+        color_discrete_sequence=custom_colors,
+        text='value'
+    )
+    fig2.update_traces(texttemplate='%{text:.2f}', textposition='outside')
+    fig2.update_layout(title=f"{y_title} by Segment", xaxis_title=y_title)
+    st.plotly_chart(fig2, use_container_width=True)
+
     st.divider()
-    st.subheader("📄 Tabular Insights")
 
-    st.markdown("#### 🥇 Top 5 Customers by CLTV")
-    st.dataframe(rfm_segmented[['User ID', 'CLTV']].sort_values(by='CLTV', ascending=False).head(5),
-                 use_container_width=True)
+    # st.markdown("#### 🥇 Top 5 Customers by CLTV")
+    # st.dataframe(rfm_segmented[['User ID', 'CLTV']].sort_values(by='CLTV', ascending=False).head(5),
+    #              use_container_width=True)
 
-    st.markdown("#### 🔥 Top Products Bought by High-Value Customers")
+    st.markdown("#### Top Products Bought by Segment Customers")
+
     try:
-        high_value_users = rfm_segmented[rfm_segmented['segment'] == 'High']['User ID']
-        top_products = df_orders[df_orders['Transaction ID'].isin(
-            df_transactions[df_transactions['User ID'].isin(high_value_users)]['Transaction ID']
-        )].groupby('Product ID')['Quantity'].sum().sort_values(ascending=False).head(5)
+        # Segment selection
+        selected_segment = st.selectbox("Choose a Customer Segment", options=['High', 'Medium', 'Low'], index=0)
 
-        if not top_products.empty:
-            st.dataframe(top_products.reset_index(), use_container_width=True)
+        # Get users from selected segment
+        segment_users = rfm_segmented[rfm_segmented['segment'] == selected_segment]['User ID']
+        segment_transaction_ids = df_transactions[df_transactions['User ID'].isin(segment_users)]['Transaction ID']
+
+        # Normalize and map columns
+        orders = df_orders.rename(columns=lambda x: x.strip().lower().replace(" ", "_"))
+        orders.rename(columns={
+            'unitprice': 'unit_price',
+            'unit_price': 'unit_price',
+        }, inplace=True)
+
+        # Debug: show current column names
+        # st.write("🧪 Orders columns:", orders.columns.tolist())
+
+        required_cols = ['transaction_id', 'product_id', 'quantity', 'unit_price']
+        missing_cols = [col for col in required_cols if col not in orders.columns]
+        if missing_cols:
+            st.warning(f"⚠️ Required column(s) missing in orders data: {', '.join(missing_cols)}")
         else:
-            st.info("✅ No top products found for high-value customers.")
+            filtered_orders = orders[orders['transaction_id'].isin(segment_transaction_ids)].copy()
+            filtered_orders['revenue'] = filtered_orders['quantity'] * filtered_orders['unit_price']
+
+            top_products = filtered_orders.groupby('product_id').agg(
+                Total_Quantity=('quantity', 'sum'),
+                Total_Revenue=('revenue', 'sum')
+            ).sort_values(by='Total_Revenue', ascending=False).head(5).reset_index()
+
+            if not top_products.empty:
+                st.dataframe(top_products.rename(columns={'product_id': 'Product ID'}), use_container_width=True)
+            else:
+                st.info("✅ No products found for this segment.")
+
     except Exception as e:
-        st.warning(f"⚠️ Could not compute top products: {e}")
+        st.warning(f"⚠️ Could not compute product stats: {e}")
 
 def show_prediction_tab(rfm_segmented):
     st.subheader("🔮 Predicted CLTV (Next 3 Months)")
