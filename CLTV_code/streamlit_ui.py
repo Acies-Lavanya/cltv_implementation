@@ -232,51 +232,63 @@ def show_prediction_tab(rfm_segmented):
     st.subheader("🔮 Predicted CLTV (Next 3 Months)")
     st.caption("Forecasted Customer Lifetime Value using BG/NBD + Gamma-Gamma model.")
 
-    # 🔍 Segment Filter
-    selected_segment = st.selectbox("Filter by Customer Segment", options=["All", "High", "Medium", "Low"], index=0)
+    # Table Filter
+    table_segment = st.selectbox(
+        "📋 Table Filter by Segment", ["All", "High", "Medium", "Low"],
+        index=0, key="table_segment_filter"
+    )
 
-    if selected_segment != "All":
-        filtered_df = rfm_segmented[rfm_segmented['segment'] == selected_segment].copy()
+    if table_segment != "All":
+        filtered_df = rfm_segmented[rfm_segmented['segment'] == table_segment].copy()
     else:
         filtered_df = rfm_segmented.copy()
 
-    # 🔢 Clean and sort
-    filtered_df = filtered_df[['User ID', 'CLTV', 'predicted_cltv_3m']].dropna()
-    filtered_df = filtered_df.sort_values(by='CLTV', ascending=False).reset_index(drop=True)
-    filtered_df['Customer Index'] = filtered_df.index + 1
-    filtered_df['User ID'] = filtered_df['User ID'].astype(str)
-
-    # 📊 Display Table
     st.dataframe(
-        filtered_df[['User ID', 'predicted_cltv_3m']]
+        filtered_df[['User ID', 'segment', 'CLTV', 'predicted_cltv_3m']]
         .sort_values(by='predicted_cltv_3m', ascending=False)
         .reset_index(drop=True)
-        .style.format({'predicted_cltv_3m': '₹{:,.2f}'}),
+        .style.format({'CLTV': '₹{:,.2f}', 'predicted_cltv_3m': '₹{:,.2f}'}),
         use_container_width=True
     )
 
-    # 📈 Line Chart: Historical vs Predicted
-    fig = px.line(
-        filtered_df,
-        x='Customer Index',
-        y=['CLTV', 'predicted_cltv_3m'],
-        labels={'value': 'CLTV Value', 'variable': 'CLTV Type'},
-        color_discrete_map={
-            'CLTV': '#1f77b4',               # Blue
-            'predicted_cltv_3m': '#2ca02c'   # Green
-        },
-        markers=True
-    )
-    fig.update_layout(
-        title="📉 Historical vs Predicted CLTV",
-        xaxis_title="Customer Index (Sorted by Historical CLTV)",
-        yaxis_title="CLTV Value (₹)",
-        height=600
+    st.markdown("---")
+
+    # Graph Filter BELOW the table
+    graph_segment = st.selectbox(
+        "📈 Graph Filter by Segment", ["All", "High", "Medium", "Low"],
+        index=0, key="graph_segment_filter"
     )
 
-    fig.update_traces(
-        hovertemplate="<b>Customer Index: %{x}</b><br>CLTV: ₹%{y:.2f}<br>User ID: %{customdata[0]}",
-        customdata=filtered_df[['User ID']]
+    if graph_segment != "All":
+        graph_data = rfm_segmented[rfm_segmented['segment'] == graph_segment].copy()
+    else:
+        graph_data = rfm_segmented.copy()
+
+    # Sort by actual CLTV for visual clarity
+    graph_data = graph_data.sort_values(by='CLTV', ascending=False).reset_index(drop=True)
+    graph_data['Index'] = graph_data.index + 1  # For x-axis
+
+    # Create line chart with both actual and predicted
+    fig = px.line(
+        graph_data, x='Index', y='CLTV', markers=True,
+        labels={'Index': 'Customer Index', 'CLTV': 'Historical CLTV'},
+        title=f"📊 Historical vs Predicted CLTV ({graph_segment} Segment)"
+    )
+
+    fig.add_scatter(
+        x=graph_data['Index'],
+        y=graph_data['predicted_cltv_3m'],
+        mode='markers+lines',
+        name='Predicted CLTV (3M)',
+        marker=dict(color='green'),
+        line=dict(color='green')
+    )
+
+    fig.update_layout(
+        xaxis_title="Customer Index (sorted by Historical CLTV)",
+        yaxis_title="CLTV Value (₹)",
+        height=500,
+        legend=dict(title="Type")
     )
 
     st.plotly_chart(fig, use_container_width=True)
