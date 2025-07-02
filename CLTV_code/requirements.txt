@@ -3,3 +3,4 @@ pandas
 plotly
 lifetimes
 streamlit-option-menu
+scikit-learn
