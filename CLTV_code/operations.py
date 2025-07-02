@@ -66,5 +66,5 @@ class CustomerAnalytics:
         df['CLTV'] = df['aov'] * df['frequency']
         return df
 
-    def customers_at_risk(self, customer_level, threshold_days=90):
+    def customers_at_risk(self, customer_level, threshold_days=70):
         return customer_level[customer_level['recency'] > threshold_days]

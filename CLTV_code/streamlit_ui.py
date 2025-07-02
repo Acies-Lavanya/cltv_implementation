@@ -119,20 +119,39 @@ def show_insights():
     st.divider()
     st.subheader("📈 Visual Insights")
 
+    # Color palette
+    segment_colors = {
+        'High': '#2ca02c',     # green
+        'Medium': "#fdd966",   # yellow
+        'Low': "#F02727"       # dark red
+    }
+
     segment_counts = rfm_segmented['segment'].value_counts().reset_index()
     segment_counts.columns = ['Segment', 'Count']
-    custom_colors = ['#1f77b4', '#2ca02c', '#ff7f0e', '#d62728', '#9467bd']
+    segment_counts['Color'] = segment_counts['Segment'].map(segment_colors)
 
     viz_col1, viz_col2 = st.columns(2)
     with viz_col1:
         st.markdown("#### 🎯 Customer Segment Distribution")
-        fig1 = px.pie(segment_counts, values='Count', names='Segment', hole=0.45, color_discrete_sequence=custom_colors)
+        fig1 = px.pie(
+            segment_counts,
+            values='Count',
+            names='Segment',
+            hole=0.45,
+            color='Segment',
+            color_discrete_map=segment_colors
+        )
         fig1.update_traces(textinfo='percent+label', textposition='inside')
         st.plotly_chart(fig1, use_container_width=True)
 
     with viz_col2:
         st.markdown("#### 🔮 Predicted CLTV Distribution (3-Month)")
-        fig4 = px.histogram(rfm_segmented, x='predicted_cltv_3m', nbins=30, color_discrete_sequence=['#636efa'])
+        fig4 = px.histogram(
+            rfm_segmented,
+            x='predicted_cltv_3m',
+            nbins=30,
+            color_discrete_sequence=['#2ca02c']  # solid green
+        )
         fig4.update_layout(xaxis_title="Predicted CLTV", yaxis_title="Customer Count")
         st.plotly_chart(fig4, use_container_width=True)
 
@@ -145,9 +164,19 @@ def show_insights():
         metric_data = rfm_segmented.groupby("segment")['CLTV'].mean().reset_index().rename(columns={"CLTV": "value"})
         y_title = "Average CLTV"
 
-    fig2 = px.bar(metric_data.sort_values(by='value'), x='value', y='segment', orientation='h',
-                  labels={'value': y_title}, color='segment', color_discrete_sequence=custom_colors, text='value')
+    metric_data['Color'] = metric_data['segment'].map(segment_colors)
+    fig2 = px.bar(
+        metric_data.sort_values(by='value'),
+        x='value',
+        y='segment',
+        orientation='h',
+        labels={'value': y_title},
+        color='segment',
+        color_discrete_map=segment_colors,
+        text='value'
+    )
     fig2.update_traces(texttemplate='%{text:.2f}', textposition='outside')
+    fig2.update_layout(title=f"{y_title} by Segment", xaxis_title=y_title)
     st.plotly_chart(fig2, use_container_width=True)
 
     # 🛍️ Top Products by Segment
@@ -187,9 +216,12 @@ def show_insights():
                     text='Total_Revenue',
                     labels={'product_id': 'Product ID', 'Total_Revenue': 'Revenue'},
                     color='product_id',
-                    color_discrete_sequence=custom_colors[:5]
+                    color_discrete_sequence=[
+                        '#006400', '#228B22', '#32CD32', '#7CFC00', '#ADFF2F'  # Gradient of green
+                    ]
                 )
                 fig_products.update_traces(texttemplate='₹%{text:.2f}', textposition='outside')
+                fig_products.update_layout(yaxis_title="Total Revenue", xaxis_title="Product ID")
                 st.plotly_chart(fig_products, use_container_width=True)
             else:
                 st.info("✅ No products found for this segment.")
@@ -199,18 +231,62 @@ def show_insights():
 def show_prediction_tab(rfm_segmented):
     st.subheader("🔮 Predicted CLTV (Next 3 Months)")
     st.caption("Forecasted Customer Lifetime Value using BG/NBD + Gamma-Gamma model.")
+
+    # 🔍 Segment Filter
+    selected_segment = st.selectbox("Filter by Customer Segment", options=["All", "High", "Medium", "Low"], index=0)
+
+    if selected_segment != "All":
+        filtered_df = rfm_segmented[rfm_segmented['segment'] == selected_segment].copy()
+    else:
+        filtered_df = rfm_segmented.copy()
+
+    # 🔢 Clean and sort
+    filtered_df = filtered_df[['User ID', 'CLTV', 'predicted_cltv_3m']].dropna()
+    filtered_df = filtered_df.sort_values(by='CLTV', ascending=False).reset_index(drop=True)
+    filtered_df['Customer Index'] = filtered_df.index + 1
+    filtered_df['User ID'] = filtered_df['User ID'].astype(str)
+
+    # 📊 Display Table
     st.dataframe(
-        rfm_segmented[['User ID', 'predicted_cltv_3m']]
+        filtered_df[['User ID', 'predicted_cltv_3m']]
         .sort_values(by='predicted_cltv_3m', ascending=False)
         .reset_index(drop=True)
-        .style.format({'predicted_cltv_3m': '₹{:,.2f}'}), use_container_width=True
+        .style.format({'predicted_cltv_3m': '₹{:,.2f}'}),
+        use_container_width=True
     )
+
+    # 📈 Line Chart: Historical vs Predicted
+    fig = px.line(
+        filtered_df,
+        x='Customer Index',
+        y=['CLTV', 'predicted_cltv_3m'],
+        labels={'value': 'CLTV Value', 'variable': 'CLTV Type'},
+        color_discrete_map={
+            'CLTV': '#1f77b4',               # Blue
+            'predicted_cltv_3m': '#2ca02c'   # Green
+        },
+        markers=True
+    )
+    fig.update_layout(
+        title="📉 Historical vs Predicted CLTV",
+        xaxis_title="Customer Index (Sorted by Historical CLTV)",
+        yaxis_title="CLTV Value (₹)",
+        height=600
+    )
+
+    fig.update_traces(
+        hovertemplate="<b>Customer Index: %{x}</b><br>CLTV: ₹%{y:.2f}<br>User ID: %{customdata[0]}",
+        customdata=filtered_df[['User ID']]
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
+
 
 def show_detailed_view(rfm_segmented, at_risk):
     st.subheader("📋 Full RFM Segmented Data with CLTV")
     st.dataframe(rfm_segmented)
 
-    st.subheader("⚠️ Customers at Risk (Recency > 90 days)")
+    st.subheader("⚠️ Customers at Risk (Recency > 70 days)")
     st.caption("These are customers whose last purchase was over 90 days ago and may be at risk of churning.")
     st.dataframe(at_risk)
 
