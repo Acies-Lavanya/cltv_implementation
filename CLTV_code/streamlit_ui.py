@@ -197,30 +197,65 @@ def show_insights():
         st.plotly_chart(fig1, use_container_width=True)
     
     with viz_col2:
-     st.markdown("#### 📊 Segment-wise Average Metrics")
-     metric_option = st.selectbox("Choose Metric", options=["AOV", "Average CLTV"], index=0, key="segment_metric_option")
+        st.markdown("#### 📊 Segment-wise Average Metrics")
 
-     if metric_option == "AOV":
-         metric_data = rfm_segmented.groupby("segment")['aov'].mean().reset_index().rename(columns={"aov": "value"})
-         y_title = "Average Order Value"
-     else:
-         metric_data = rfm_segmented.groupby("segment")['CLTV'].mean().reset_index().rename(columns={"CLTV": "value"})
-         y_title = "Average CLTV"
+        metric_option = st.selectbox(
+            "Choose Metric",
+            options=[
+                "Average Order Value",
+                "Average CLTV",
+                "Avg Transactions per User",
+                "Avg Days Between Orders",
+                "Avg Recency",
+                "Avg Monetary Value",
+                "Predicted Churn Probability"
+            ],
+            index=0,
+            key="segment_metric_option"
+        )
 
-     metric_data['Color'] = metric_data['segment'].map(segment_colors)
-     fig2 = px.bar(
-         metric_data.sort_values(by='value'),
-         x='value',
-         y='segment',
-         orientation='h',
-         labels={'value': y_title},
-         color='segment',
-         color_discrete_map=segment_colors,
-         text='value'
-     )
-     fig2.update_traces(texttemplate='₹%{text:.2f}', textposition='outside')
-     fig2.update_layout(title=f"{y_title} by Segment", xaxis_title=y_title)
-     st.plotly_chart(fig2, use_container_width=True)
+        if metric_option == "Average Order Value":
+            metric_data = rfm_segmented.groupby("segment")["aov"].mean().reset_index().rename(columns={"aov": "value"})
+            y_title = "Average Order Value"
+        elif metric_option == "Average CLTV":
+            metric_data = rfm_segmented.groupby("segment")["CLTV"].mean().reset_index().rename(columns={"CLTV": "value"})
+            y_title = "Average CLTV"
+        elif metric_option == "Avg Transactions per User":
+            metric_data = rfm_segmented.groupby("segment")["frequency"].mean().reset_index().rename(columns={"frequency": "value"})
+            y_title = "Avg Transactions/User"
+        elif metric_option == "Avg Days Between Orders":
+            metric_data = rfm_segmented.groupby("segment")["avg_days_between_orders"].mean().reset_index().rename(columns={"avg_days_between_orders": "value"})
+            y_title = "Avg Days Between Orders"
+        elif metric_option == "Avg Recency":
+            metric_data = rfm_segmented.groupby("segment")["recency"].mean().reset_index().rename(columns={"recency": "value"})
+            y_title = "Average Recency (days)"
+        elif metric_option == "Avg Monetary Value":
+            metric_data = rfm_segmented.groupby("segment")["monetary"].mean().reset_index().rename(columns={"monetary": "value"})
+            y_title = "Avg Monetary Value"
+        elif metric_option == "Predicted Churn Probability":
+            metric_data = rfm_segmented.groupby("segment")["predicted_churn_prob"].mean().reset_index().rename(columns={"predicted_churn_prob": "value"})
+            y_title = "Predicted Churn Probability"
+
+        metric_data['Color'] = metric_data['segment'].map(segment_colors)
+        fig2 = px.bar(
+            metric_data.sort_values(by='value'),
+            x='value',
+            y='segment',
+            orientation='h',
+            labels={'value': y_title},
+            color='segment',
+            color_discrete_map=segment_colors,
+            text='value'
+        )
+
+        if "₹" in y_title:
+            fig2.update_traces(texttemplate='₹%{text:.2f}')
+        elif "Probability" in y_title:
+            fig2.update_traces(texttemplate='%{text:.1%}')
+        else:
+            fig2.update_traces(texttemplate='%{text:.2f}')
+        fig2.update_layout(title=f"{y_title} by Segment", xaxis_title=y_title)
+        st.plotly_chart(fig2, use_container_width=True)
 
     # st.markdown("#### 📊 Segment-wise Average Metrics")
     # metric_option = st.selectbox("Choose Metric to Display", options=["AOV", "Average CLTV"], index=0)
