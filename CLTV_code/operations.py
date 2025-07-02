@@ -15,10 +15,16 @@ class CustomerAnalytics:
         ).reset_index()
 
         customer_level['aov'] = round(customer_level['monetary'] / customer_level['frequency'], 2)
-        customer_level['avg_days_between_orders'] = round(
-            (customer_level['last_purchase'] - customer_level['first_purchase']).dt.days / 
-            (customer_level['frequency'] - 1), 0
-        ).fillna(-1).astype(int)
+        customer_level['avg_days_between_orders'] = (
+    (customer_level['last_purchase'] - customer_level['first_purchase']).dt.days / 
+    (customer_level['frequency'] - 1)
+)
+
+        # Replace infinite or NaN values (from frequency = 1) with median
+        valid_avg = customer_level['avg_days_between_orders'][customer_level['avg_days_between_orders'].notna() & (customer_level['avg_days_between_orders'] != float('inf'))]
+        median_gap = valid_avg.median()
+        customer_level['avg_days_between_orders'] = customer_level['avg_days_between_orders'].replace([float('inf'), -float('inf')], None)
+        customer_level['avg_days_between_orders'] = customer_level['avg_days_between_orders'].fillna(median_gap).round(0).astype(int)
 
         # Lifespan metrics
         customer_level['lifespan_1d'] = (customer_level['last_purchase'] - customer_level['first_purchase']).dt.days + 1
@@ -68,3 +74,16 @@ class CustomerAnalytics:
 
     def customers_at_risk(self, customer_level, threshold_days=90):
         return customer_level[customer_level['recency'] > threshold_days]
+    
+    def label_churned_customers(self, customer_df, inactive_days_threshold=30):
+     customer_df['is_churned'] = (customer_df['recency'] > inactive_days_threshold).astype(int)
+     return customer_df
+
+    def get_churn_features(self, customer_df):
+        feature_cols = [
+            'frequency', 'monetary', 'aov',
+            'avg_days_between_orders', 'CLTV_30d', 'CLTV_60d', 'CLTV_90d'
+        ]
+        X = customer_df[feature_cols]
+        y = customer_df['is_churned']
+        return X, y
