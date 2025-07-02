@@ -173,9 +173,9 @@ def show_insights():
 
     # Color palette
     segment_colors = {
-        'High': '#2ca02c',     # green
-        'Medium': "#fdd966",   # yellow
-        'Low': "#F02727"       # dark red
+        'High': '#1f77b4',     
+        'Medium': "#5fa2dd",   
+        'Low': "#cfe2f3"       
     }
 
     segment_counts = rfm_segmented['segment'].value_counts().reset_index()
@@ -283,9 +283,14 @@ def show_insights():
                     text='Total_Revenue',
                     labels={'product_id': 'Product ID', 'Total_Revenue': 'Revenue'},
                     color='product_id',
-                    color_discrete_sequence=[
-                        '#006400', '#228B22', '#32CD32', '#7CFC00', '#ADFF2F'  # Gradient of green
-                    ]
+                    color_discrete_sequence = [
+                            '#08306b',  # Very Dark Blue
+                            '#2171b5',  # Mid Blue
+                            '#4292c6',  # Light Blue
+                            '#6baed6',  # Softer Blue
+                            '#9ecae1'   # Pale Blue
+                        ]
+                        
                 )
                 fig_products.update_traces(texttemplate='₹%{text:.2f}', textposition='outside')
                 fig_products.update_layout(yaxis_title="Total Revenue", xaxis_title="Product ID")
@@ -366,7 +371,7 @@ def show_prediction_tab(rfm_segmented):
         graph_data,
         x='predicted_cltv_3m',
         nbins=30,
-        color_discrete_sequence=['#2ca02c']  # solid green
+        color_discrete_sequence=['#5fa2dd']  # solid green
     )
     fig_dist.update_layout(
         xaxis_title="Predicted CLTV",
