@@ -124,13 +124,49 @@ def show_insights():
     df_orders = st.session_state['df_orders']
     df_transactions = st.session_state['df_transactions']
 
-    st.subheader("📊 Key Metrics")
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Total Customers", len(rfm_segmented))
-    col2.metric("High Value Customers", (rfm_segmented['segment'] == 'High').sum())
-    col3.metric("Customers at Risk*", len(at_risk))
-    st.caption("📌 *Customers at Risk* refers to users whose **Recency > 90 days**")
+    st.subheader("📌 Key KPIs")
 
+    # Safety check: required columns must exist in already-standardized format
+    required_order_cols = {'Quantity', 'Unit Price', 'Order Date', 'User ID'}
+    required_trans_cols = {'User ID', 'Transaction ID'}
+
+    if not required_order_cols.issubset(df_orders.columns):
+        st.warning(f"⚠ Required columns missing from orders: {required_order_cols - set(df_orders.columns)}")
+        return
+    if not required_trans_cols.issubset(df_transactions.columns):
+        st.warning(f"⚠ Required columns missing from transactions: {required_trans_cols - set(df_transactions.columns)}")
+        return
+
+    # KPI Calculations
+    df_orders['Revenue'] = df_orders['Quantity'] * df_orders['Unit Price']
+    total_revenue = df_orders['Revenue'].sum()
+    aov = df_orders.groupby('User ID')['Revenue'].sum().mean()
+    avg_cltv = rfm_segmented['CLTV'].mean()
+    avg_txns_per_user = df_transactions.groupby('User ID')['Transaction ID'].nunique().mean()
+
+    start_date = pd.to_datetime(df_orders['Order Date']).min().strftime("%d-%m-%Y")
+    end_date = pd.to_datetime(df_orders['Order Date']).max().strftime("%d-%m-%Y")
+    total_customers = len(rfm_segmented)
+    high_value_customers = (rfm_segmented['segment'] == 'High').sum()
+    customers_at_risk = len(at_risk)
+
+    # 3 x 3 KPI layout
+    row1 = st.columns(3)
+    row1[0].metric("🛒 Avg Order Value", f"₹{aov:,.2f}")
+    row1[1].metric("💰 Avg Customer CLTV", f"₹{avg_cltv:,.2f}")
+    row1[2].metric("📦 Avg Transactions/User", f"{avg_txns_per_user:.2f}")
+
+    row2 = st.columns(3)
+    row2[0].metric("📈 Total Revenue", f"₹{total_revenue:,.0f}")
+    row2[1].metric("📆 Data Timeframe", f"{start_date} → {end_date}")
+    row2[2].metric("👥 Total Customers", total_customers)
+
+    row3 = st.columns(3)
+    row3[0].metric("🌟 High Value Customers", high_value_customers)
+    row3[1].metric("⚠️ Customers at Risk*", customers_at_risk)
+    row3[2].empty()
+
+    st.caption("📌 *Customers at Risk* refers to users whose **Recency > 90 days**")
     st.divider()
     st.subheader("📈 Visual Insights")
 
