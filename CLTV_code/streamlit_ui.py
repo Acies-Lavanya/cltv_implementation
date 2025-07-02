@@ -17,7 +17,7 @@ def run_streamlit_app():
     st.title("Customer Lifetime Value Dashboard")
 
 
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
         "Upload / Load Data", "Insights", "Detailed View", "Predictions", "Realization Curve", "Churn" 
     ])
 
