@@ -195,41 +195,56 @@ def show_insights():
         )
         fig1.update_traces(textinfo='percent+label', textposition='inside')
         st.plotly_chart(fig1, use_container_width=True)
-
+    
     with viz_col2:
-        st.markdown("#### 🔮 Predicted CLTV Distribution (3-Month)")
-        fig4 = px.histogram(
-            rfm_segmented,
-            x='predicted_cltv_3m',
-            nbins=30,
-            color_discrete_sequence=['#2ca02c']  # solid green
-        )
-        fig4.update_layout(xaxis_title="Predicted CLTV", yaxis_title="Customer Count")
-        st.plotly_chart(fig4, use_container_width=True)
+     st.markdown("#### 📊 Segment-wise Average Metrics")
+     metric_option = st.selectbox("Choose Metric", options=["AOV", "Average CLTV"], index=0, key="segment_metric_option")
 
-    st.markdown("#### 📊 Segment-wise Average Metrics")
-    metric_option = st.selectbox("Choose Metric to Display", options=["AOV", "Average CLTV"], index=0)
-    if metric_option == "AOV":
-        metric_data = rfm_segmented.groupby("segment")['aov'].mean().reset_index().rename(columns={"aov": "value"})
-        y_title = "Average Order Value"
-    else:
-        metric_data = rfm_segmented.groupby("segment")['CLTV'].mean().reset_index().rename(columns={"CLTV": "value"})
-        y_title = "Average CLTV"
+     if metric_option == "AOV":
+         metric_data = rfm_segmented.groupby("segment")['aov'].mean().reset_index().rename(columns={"aov": "value"})
+         y_title = "Average Order Value"
+     else:
+         metric_data = rfm_segmented.groupby("segment")['CLTV'].mean().reset_index().rename(columns={"CLTV": "value"})
+         y_title = "Average CLTV"
 
-    metric_data['Color'] = metric_data['segment'].map(segment_colors)
-    fig2 = px.bar(
-        metric_data.sort_values(by='value'),
-        x='value',
-        y='segment',
-        orientation='h',
-        labels={'value': y_title},
-        color='segment',
-        color_discrete_map=segment_colors,
-        text='value'
-    )
-    fig2.update_traces(texttemplate='%{text:.2f}', textposition='outside')
-    fig2.update_layout(title=f"{y_title} by Segment", xaxis_title=y_title)
-    st.plotly_chart(fig2, use_container_width=True)
+     metric_data['Color'] = metric_data['segment'].map(segment_colors)
+     fig2 = px.bar(
+         metric_data.sort_values(by='value'),
+         x='value',
+         y='segment',
+         orientation='h',
+         labels={'value': y_title},
+         color='segment',
+         color_discrete_map=segment_colors,
+         text='value'
+     )
+     fig2.update_traces(texttemplate='₹%{text:.2f}', textposition='outside')
+     fig2.update_layout(title=f"{y_title} by Segment", xaxis_title=y_title)
+     st.plotly_chart(fig2, use_container_width=True)
+
+    # st.markdown("#### 📊 Segment-wise Average Metrics")
+    # metric_option = st.selectbox("Choose Metric to Display", options=["AOV", "Average CLTV"], index=0)
+    # if metric_option == "AOV":
+    #     metric_data = rfm_segmented.groupby("segment")['aov'].mean().reset_index().rename(columns={"aov": "value"})
+    #     y_title = "Average Order Value"
+    # else:
+    #     metric_data = rfm_segmented.groupby("segment")['CLTV'].mean().reset_index().rename(columns={"CLTV": "value"})
+    #     y_title = "Average CLTV"
+
+    # metric_data['Color'] = metric_data['segment'].map(segment_colors)
+    # fig2 = px.bar(
+    #     metric_data.sort_values(by='value'),
+    #     x='value',
+    #     y='segment',
+    #     orientation='h',
+    #     labels={'value': y_title},
+    #     color='segment',
+    #     color_discrete_map=segment_colors,
+    #     text='value'
+    # )
+    # fig2.update_traces(texttemplate='%{text:.2f}', textposition='outside')
+    # fig2.update_layout(title=f"{y_title} by Segment", xaxis_title=y_title)
+    # st.plotly_chart(fig2, use_container_width=True)
 
     # 🛍️ Top Products by Segment
     st.divider()
@@ -344,6 +359,22 @@ def show_prediction_tab(rfm_segmented):
     )
 
     st.plotly_chart(fig, use_container_width=True)
+
+    st.markdown("#### 🔮 Predicted CLTV Distribution (3-Month)")
+
+    fig_dist = px.histogram(
+        graph_data,
+        x='predicted_cltv_3m',
+        nbins=30,
+        color_discrete_sequence=['#2ca02c']  # solid green
+    )
+    fig_dist.update_layout(
+        xaxis_title="Predicted CLTV",
+        yaxis_title="Customer Count",
+        title="Distribution of Predicted CLTV (Next 3 Months)"
+    )
+    st.plotly_chart(fig_dist, use_container_width=True)
+
 
 
 def show_detailed_view(rfm_segmented, at_risk):
