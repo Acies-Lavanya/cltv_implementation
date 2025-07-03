@@ -87,3 +87,11 @@ class CustomerAnalytics:
         X = customer_df[feature_cols]
         y = customer_df['is_churned']
         return X, y
+    def prepare_survival_data(self, customer_df, churn_threshold=30):
+        """
+        Adds 'duration' and 'event' for survival analysis.
+        """
+        customer_df['duration'] = customer_df['lifespan_1d']
+        customer_df['event'] = (customer_df['recency'] > churn_threshold).astype(int)
+        return customer_df
+  
