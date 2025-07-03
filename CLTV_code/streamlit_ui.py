@@ -211,7 +211,6 @@ def show_insights():
                 "Avg Days Between Orders",
                 "Avg Recency",
                 "Avg Monetary Value",
-                "Predicted Churn Probability"
             ],
             index=0,
             key="segment_metric_option"
@@ -235,9 +234,6 @@ def show_insights():
         elif metric_option == "Avg Monetary Value":
             metric_data = rfm_segmented.groupby("segment")["monetary"].mean().reset_index().rename(columns={"monetary": "value"})
             y_title = "Avg Monetary Value"
-        elif metric_option == "Predicted Churn Probability":
-            metric_data = rfm_segmented.groupby("segment")["predicted_churn_prob"].mean().reset_index().rename(columns={"predicted_churn_prob": "value"})
-            y_title = "Predicted Churn Probability"
 
         metric_data['Color'] = metric_data['segment'].map(segment_colors)
         fig2 = px.bar(
@@ -513,12 +509,44 @@ def show_realization_curve(df_orders, rfm_segmented):
             "Avg CLTV per User": cltv_values
         })
 
-        fig = px.line(chart_df, x="Period (Days)", y="Avg CLTV per User", markers=True)
-        fig.update_layout(title=f"CLTV Realization Curve - {segment_option}", xaxis_title="Days", yaxis_title="Avg CLTV")
+        fig = px.line(
+            chart_df,
+            x="Period (Days)",
+            y="Avg CLTV per User",
+            text="Avg CLTV per User",
+            markers=True
+        )
+        
+        fig.update_traces(
+            texttemplate='₹%{text:.2f}',
+            textposition='top center',
+            textfont=dict(size=14, color='black'),  # 👈 Bigger, darker labels
+            marker=dict(size=8)
+        )
+        
+        fig.update_layout(
+            title={
+                'text': f"CLTV Realization Curve - {segment_option}",
+                'x': 0.5,
+                'xanchor': 'center',
+                'font': dict(size=20, color='black')  # Title styling
+            },
+            xaxis=dict(
+                title=dict(text="Days", font=dict(size=16, color='black')),
+                tickfont=dict(size=14, color='black')
+            ),
+            yaxis=dict(
+                title=dict(text="Avg CLTV", font=dict(size=16, color='black')),
+                tickfont=dict(size=14, color='black')
+            ),
+            height=500
+        )
+
         st.plotly_chart(fig, use_container_width=True)
 
     except Exception as e:
         st.error(f"Could not generate CLTV curve: {e}")
+
 
 def has_duplicate_columns(df1, df2):
     return df1.columns.duplicated().any() or df2.columns.duplicated().any()
