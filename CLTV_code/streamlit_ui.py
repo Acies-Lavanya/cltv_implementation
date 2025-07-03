@@ -7,6 +7,7 @@ from operations import CustomerAnalytics
 from mapping import auto_map_columns, expected_orders_cols, expected_transaction_cols
 from cltv_model import fit_bgf_ggf
 from churn_model import train_churn_model
+from cox_model import train_cox_model
 
 BASE_DIR = os.path.dirname(__file__)
 SAMPLE_ORDER_PATH = os.path.join(BASE_DIR, "sample_data", "Orders_v2.csv")
@@ -88,6 +89,8 @@ def process_data():
         rfm_segmented = analytics.rfm_segmentation(customer_level)
         rfm_segmented = analytics.calculate_cltv(rfm_segmented)
         rfm_segmented = analytics.label_churned_customers(rfm_segmented)
+        rfm_segmented = analytics.prepare_survival_data(rfm_segmented)
+
         X, y = analytics.get_churn_features(rfm_segmented)
 
         model, report, importances, X_test, y_test = train_churn_model(X, y)
@@ -98,6 +101,11 @@ def process_data():
         predicted_cltv = fit_bgf_ggf(df_transactions)
         rfm_segmented = rfm_segmented.merge(predicted_cltv, on='User ID', how='left')
         rfm_segmented['predicted_cltv_3m'] = rfm_segmented['predicted_cltv_3m'].fillna(0)
+
+        cox_features = ['recency', 'frequency', 'monetary', 'aov', 'avg_days_between_orders',
+                'CLTV_30d', 'CLTV_60d', 'CLTV_90d']
+        cox_model, rfm_segmented = train_cox_model(rfm_segmented, cox_features)
+        st.session_state['cox_model'] = cox_model
 
         at_risk = analytics.customers_at_risk(rfm_segmented)
 
@@ -425,13 +433,75 @@ def show_detailed_view(rfm_segmented, at_risk):
     st.caption("These are customers whose last purchase was over 90 days ago and may be at risk of churning.")
     st.dataframe(at_risk)
 def show_churn_tab():
-    st.subheader("📉 Churn Prediction")
+    st.subheader("📉 Churn Prediction Overview")
 
     rfm_segmented = st.session_state['rfm_segmented']
     churned = rfm_segmented[rfm_segmented['predicted_churn'] == 1]
 
     st.metric("Predicted Churned Customers", len(churned))
     st.metric("Churn Rate (%)", f"{(len(churned) / len(rfm_segmented) * 100):.2f}")
+
+    st.divider()
+    st.markdown("### 📊 Churn Summary by Segment")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.markdown("#### 🔴 Avg Churn Probability")
+        churn_by_segment = (
+            rfm_segmented
+            .groupby("segment")['predicted_churn_prob']
+            .mean()
+            .reset_index()
+            .rename(columns={'predicted_churn_prob': 'Avg Churn Probability'})
+        )
+        fig_churn = px.bar(
+            churn_by_segment.sort_values(by='Avg Churn Probability'),
+            x='Avg Churn Probability',
+            y='segment',
+            orientation='h',
+            color='segment',
+            color_discrete_map={'High': '#1f77b4', 'Medium': '#5fa2dd', 'Low': '#cfe2f3'},
+            text='Avg Churn Probability'
+        )
+        fig_churn.update_traces(texttemplate='%{text:.1%}', textposition='outside')
+        fig_churn.update_layout(height=350, margin=dict(t=30))
+        st.plotly_chart(fig_churn, use_container_width=True)
+
+    with col2:
+        st.markdown("#### ⏳ Avg Expected Active Days")
+        active_days = (
+            rfm_segmented
+            .groupby("segment")['expected_active_days']
+            .mean()
+            .reset_index()
+            .rename(columns={'expected_active_days': 'Avg Expected Active Days'})
+        )
+        fig_days = px.bar(
+            active_days.sort_values(by='Avg Expected Active Days'),
+            x='Avg Expected Active Days',
+            y='segment',
+            orientation='h',
+            color='segment',
+            color_discrete_map={'High': '#1f77b4', 'Medium': '#5fa2dd', 'Low': '#cfe2f3'},
+            text='Avg Expected Active Days'
+        )
+        fig_days.update_traces(texttemplate='%{text:.0f}', textposition='outside')
+        fig_days.update_layout(height=350, margin=dict(t=30))
+        st.plotly_chart(fig_days, use_container_width=True)
+
+    
+    st.divider()
+    st.markdown("### 🔍 All Customers at a Glance")
+
+    if st.toggle("🕵️ Detailed View of Churn Analysis"):
+         st.dataframe(
+        rfm_segmented[['User ID', 'segment', 'predicted_cltv_3m',
+                       'predicted_churn_prob', 'predicted_churn','expected_active_days']]
+        .sort_values(by='predicted_churn_prob', ascending=False)
+        .style.format({'predicted_churn_prob': '{:.2%}', 'predicted_cltv_3m': '₹{:,.2f}'}),
+        use_container_width=True
+    )
 
     """st.divider()
     st.markdown("### 🧠 Model Classification Report")
@@ -444,18 +514,15 @@ def show_churn_tab():
         feature_cols = ['frequency', 'monetary', 'aov', 'avg_days_between_orders', 'CLTV_30d', 'CLTV_60d', 'CLTV_90d']
         importance_df = pd.DataFrame({'Feature': feature_cols, 'Importance': st.session_state['churn_importance']}).sort_values(by='Importance')
         fig = px.bar(importance_df, x='Importance', y='Feature', orientation='h', title="Feature Importance")
-        st.plotly_chart(fig, use_container_width=True)"""
-
-    st.divider()
-    st.markdown("### 🔍 All Customers with Churn Prediction")
-    st.dataframe(
-        rfm_segmented[['User ID', 'segment', 'frequency', 'aov', 'predicted_cltv_3m',
-                       'predicted_churn_prob', 'predicted_churn']]
-        .sort_values(by='predicted_churn_prob', ascending=False)
-        .style.format({'predicted_churn_prob': '{:.2%}', 'predicted_cltv_3m': '₹{:,.2f}'}),
-        use_container_width=True
-    )
+        st.plotly_chart(fig, use_container_width=True)"""   
    
+    """st.divider()
+    st.markdown("### ⏳ Predicted Days Until Churn")
+    st.dataframe(
+        rfm_segmented[['User ID', 'segment', 'expected_churn_days', 'predicted_churn_prob']]
+        .sort_values(by='expected_churn_days')
+        .style.format({'expected_churn_days': '{:.0f}', 'predicted_churn_prob': '{:.2%}'})
+    )"""
 
 def show_realization_curve(df_orders, rfm_segmented):
     st.subheader("📈 Realization Curve of CLTV Over Time")
