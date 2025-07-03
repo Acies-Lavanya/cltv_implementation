@@ -228,69 +228,56 @@ def show_insights():
         st.plotly_chart(fig1, use_container_width=True)
         high_pct = (high_value_customers / total_customers) * 100
         metrics_cols = st.columns(3)
-        metrics_cols[0].metric("High Value", high_value_customers) #f"{high_pct:.1f}%")
+        metrics_cols[0].metric("High Value*", high_value_customers) #f"{high_pct:.1f}%")
         # metrics_cols[1].metric("⚠️ Customers at Risk*", customers_at_risk)
         metrics_cols[1].metric("Medium Value", mid_value_customers)
         metrics_cols[2].metric("Low Value", low_value_customers)
         st.caption("📌 *High Value Customers refers to users whose **RFM Score is in the top 33%.**")
     
     with viz_col2:
-        st.markdown("#### 📊 Segment-wise Average Metrics")
+        st.markdown("#### 📊 Segment-wise Summary Metrics")
 
-        metric_option = st.selectbox(
-            "Choose Metric",
-            options=[
-                "Average Order Value",
-                "Average CLTV",
-                "Avg Transactions per User",
-                "Avg Days Between Orders",
-                "Avg Recency",
-                "Avg Monetary Value",
-            ],
-            index=0,
-            key="segment_metric_option"
-        )
+        # Aggregate required metrics
+        segment_summary = rfm_segmented.groupby("segment").agg({
+            "aov": "mean",
+            "CLTV": "mean",
+            "frequency": "mean",
+            "avg_days_between_orders": "mean",
+            "recency": "mean",
+            "monetary": "mean"
+        }).round(2)
 
-        if metric_option == "Average Order Value":
-            metric_data = rfm_segmented.groupby("segment")["aov"].mean().reset_index().rename(columns={"aov": "value"})
-            y_title = "Average Order Value"
-        elif metric_option == "Average CLTV":
-            metric_data = rfm_segmented.groupby("segment")["CLTV"].mean().reset_index().rename(columns={"CLTV": "value"})
-            y_title = "Average CLTV"
-        elif metric_option == "Avg Transactions per User":
-            metric_data = rfm_segmented.groupby("segment")["frequency"].mean().reset_index().rename(columns={"frequency": "value"})
-            y_title = "Avg Transactions/User"
-        elif metric_option == "Avg Days Between Orders":
-            metric_data = rfm_segmented.groupby("segment")["avg_days_between_orders"].mean().reset_index().rename(columns={"avg_days_between_orders": "value"})
-            y_title = "Avg Days Between Orders"
-        elif metric_option == "Avg Recency":
-            metric_data = rfm_segmented.groupby("segment")["recency"].mean().reset_index().rename(columns={"recency": "value"})
-            y_title = "Average Recency (days)"
-        elif metric_option == "Avg Monetary Value":
-            metric_data = rfm_segmented.groupby("segment")["monetary"].mean().reset_index().rename(columns={"monetary": "value"})
-            y_title = "Avg Monetary Value"
+        # Order: High → Medium → Low
+        segment_order = ["High", "Medium", "Low"]
+        colors = {"High": "#1f77b4", "Medium": "#5fa2dd", "Low": "#9dcbf3"}
 
-        metric_data['Color'] = metric_data['segment'].map(segment_colors)
-        fig2 = px.bar(
-            metric_data.sort_values(by='value'),
-            x='value',
-            y='segment',
-            orientation='h',
-            labels={'value': y_title},
-            color='segment',
-            color_discrete_map=segment_colors,
-            text='value'
-        )
-
-        if "₹" in y_title:
-            fig2.update_traces(texttemplate='₹%{text:.2f}')
-        elif "Probability" in y_title:
-            fig2.update_traces(texttemplate='%{text:.1%}')
-        else:
-            fig2.update_traces(texttemplate='%{text:.2f}')
-        fig2.update_layout(title=f"{y_title} by Segment", xaxis_title=y_title)
-        st.plotly_chart(fig2, use_container_width=True)
-
+        cards = st.columns(3)
+        for i, segment in enumerate(segment_order):
+            metrics = segment_summary.loc[segment]
+            with cards[i]:
+                st.markdown(f"""
+                    <div style="
+                        background-color: {colors[segment]};
+                        padding: 20px 15px;
+                        border-radius: 12px;
+                        color: white;
+                        min-height: 250px;
+                        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+                        font-family: 'Segoe UI', sans-serif;
+                    ">
+                        <h4 style="text-align: center; margin-bottom: 15px; font-size: 20px; font-weight: 700;">
+                            {segment} Segment
+                        </h4>
+                        <ul style="list-style: none; padding: 0; font-size: 16px; font-weight: 500; line-height: 1.8;">
+                            <li><b>Avg Order Value:</b> ₹{metrics['aov']:,.2f}</li>
+                            <li><b>Avg CLTV:</b> ₹{metrics['CLTV']:,.2f}</li>
+                            <li><b>Avg Txns/User:</b> {metrics['frequency']:,.2f}</li>
+                            <li><b>Days Between Orders:</b> {metrics['avg_days_between_orders']:,.2f}</li>
+                            <li><b>Avg Recency:</b> {metrics['recency']:,.0f} days</li>
+                            <li><b>Monetary Value:</b> ₹{metrics['monetary']:,.2f}</li>
+                        </ul>
+                    </div>
+            """, unsafe_allow_html=True)
     # 🛍️ Top Products by Segment
     st.divider()
     st.markdown("#### 🛍️ Top Products Bought by Segment Customers")
@@ -397,7 +384,7 @@ def show_prediction_tab(rfm_segmented):
         color='CLTV Type',
         barmode='group',
         labels={'segment': 'Customer Segment', 'Average CLTV': 'Avg CLTV (₹)'},
-        color_discrete_map={'CLTV': '#1f77b4', 'predicted_cltv_3m': '#2ca02c'},
+        color_discrete_map={'CLTV': "#32a2f1", 'predicted_cltv_3m': "#3fd33f"},
         title='Average Historical vs Predicted CLTV per Segment'
     )
 
