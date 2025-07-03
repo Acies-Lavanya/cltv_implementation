@@ -10,6 +10,7 @@ expected_orders_cols = {
     "Quantity": ["Quantity", "Qty", "order_quantity"],
     "Total Amount": ["Total Amount", "total_amount", "amount"],
     "Unit Price": ["unit_price", "price"],
+    "Order Date": ["Order Date", "order_date", "Order_date"],
     "Discount Code Used": ["Discount Code Used", "discount_code_used", "promo_code"],
     "Discount Value": ["Discount Value", "discount_value", "discount_amount"],
     "Shipping Cost": ["Shipping Cost", "shipping_cost", "freight"],
