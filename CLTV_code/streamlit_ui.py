@@ -1,4 +1,5 @@
 import os
+from datetime import datetime, timedelta
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -153,7 +154,7 @@ def show_insights():
     # 3 x 3 KPI layout
     row1 = st.columns(3)
     row1[0].metric("🛒 Avg Order Value", f"₹{aov:,.2f}")
-    row1[1].metric("💰 Avg Customer CLTV", f"₹{avg_cltv:,.2f}")
+    row1[1].metric("💰 CLTV", f"₹{avg_cltv:,.2f}")
     row1[2].metric("📦 Avg Transactions/User", f"{avg_txns_per_user:.2f}")
 
     row2 = st.columns(3)
@@ -166,7 +167,9 @@ def show_insights():
     row3[1].metric("⚠️ Customers at Risk*", customers_at_risk)
     row3[2].empty()
 
-    st.caption("📌 *Customers at Risk* refers to users whose **Recency > 90 days**")
+    st.caption("📌 *Customers at Risk* refers to users whose **Recency > 70 days**")
+    st.caption("📌 *High Value Customers refers to users whose **RFM Score is in the top 33%.**")
+
     st.divider()
     st.subheader("📈 Visual Insights")
 
@@ -182,7 +185,7 @@ def show_insights():
     segment_counts.columns = ['Segment', 'Count']
     segment_counts['Color'] = segment_counts['Segment'].map(segment_colors)
 
-    viz_col1, viz_col2 = st.columns(2)
+    viz_col1, viz_col2 = st.columns([1, 1.2])
     with viz_col1:
         st.markdown("#### 🎯 Customer Segment Distribution")
         fig1 = px.pie(
