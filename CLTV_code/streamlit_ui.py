@@ -171,9 +171,10 @@ def show_insights():
             <div style="background-color:#aee2fd;
                         padding:18px 12px 14px 12px;
                         border-radius:10px;
-                        border:0.5px solid #FFFFFF;
+                        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
                         min-height:100px;
                         color:black;
+                        font-family: 'Segoe UI', sans-serif;
                         text-align:center">
                 <div style="font-size:16px; font-weight:600; margin-bottom:6px;">{title}</div>
                 <div style="font-size:24px; font-weight:bold; color:{color};">{value}</div>
@@ -181,21 +182,20 @@ def show_insights():
         """, unsafe_allow_html=True)
 
     row1 = st.columns(3, gap="small")
-    with row1[0]: kpi_card("🛒 Avg Order Value", f"₹{aov:.0f}")
+    with row1[0]: kpi_card("📈 Total Revenue", f"₹{total_revenue:,.0f}", color="black")
     with row1[1]: kpi_card("💰 CLTV", f"₹{avg_cltv:,.0f}")
-    with row1[2]: kpi_card("📦 Avg Transactions/User", f"{avg_txns_per_user:.0f}")
-
+    with row1[2]: kpi_card("🛒 Avg Order Value", f"₹{aov:.0f}")
     row2 = st.columns(3, gap="small")
     with row2[0]: st.text('')
     with row2[1]: st.text('')
     with row2[2]: st.text('')
 
     row3 = st.columns(3, gap="small")
-    with row3[0]: kpi_card("📈 Total Revenue", f"₹{total_revenue:,.0f}", color="black")
+    with row3[0]: kpi_card("📦 Avg Transactions/User", f"{avg_txns_per_user:.0f}")
     with row3[1]: kpi_card("📆 Data Timeframe", f"{start_date} to {end_date}", color="black")
     with row3[2]: kpi_card("👥 Total Customers", total_customers, color="black")
 
-    st.caption("📌 *Customers at Risk* refers to users whose **Recency > 70 days**")
+    #st.caption("📌 *Customers at Risk* refers to users whose **Recency > 70 days**")
     st.divider()
 
 
