@@ -367,61 +367,38 @@ def show_prediction_tab(rfm_segmented):
 
     st.markdown("---")
 
-    # Graph Filter BELOW the table
-    graph_segment = st.selectbox(
-        "📈 Graph Filter by Segment", ["All", "High", "Medium", "Low"],
-        index=0, key="graph_segment_filter"
+    # 📊 New Bar Chart: Segment-Wise Avg CLTV Comparison
+    st.markdown("#### 📊 Average Historical vs Predicted CLTV per Segment")
+
+    # Prepare segment-wise averages
+    segment_comparison = rfm_segmented.groupby('segment')[['CLTV', 'predicted_cltv_3m']].mean().reset_index()
+
+    # Melt the data for grouped bar chart
+    segment_melted = segment_comparison.melt(
+        id_vars='segment',
+        value_vars=['CLTV', 'predicted_cltv_3m'],
+        var_name='CLTV Type',
+        value_name='Average CLTV'
     )
 
-    if graph_segment != "All":
-        graph_data = rfm_segmented[rfm_segmented['segment'] == graph_segment].copy()
-    else:
-        graph_data = rfm_segmented.copy()
+    # Sort segment order
+    segment_order = ['Low', 'Medium', 'High']
+    segment_melted['segment'] = pd.Categorical(segment_melted['segment'], categories=segment_order, ordered=True)
+    segment_melted = segment_melted.sort_values(by='segment')
 
-    # Sort by actual CLTV for visual clarity
-    graph_data = graph_data.sort_values(by='CLTV', ascending=False).reset_index(drop=True)
-    graph_data['Index'] = graph_data.index + 1  # For x-axis
-
-    # Create line chart with both actual and predicted
-    fig = px.line(
-        graph_data, x='Index', y='CLTV', markers=True,
-        labels={'Index': 'Customer Index', 'CLTV': 'Historical CLTV'},
-        title=f"📊 Historical vs Predicted CLTV ({graph_segment} Segment)"
+    # Create the grouped bar chart
+    fig_bar = px.bar(
+        segment_melted,
+        x='segment',
+        y='Average CLTV',
+        color='CLTV Type',
+        barmode='group',
+        labels={'segment': 'Customer Segment', 'Average CLTV': 'Avg CLTV (₹)'},
+        color_discrete_map={'CLTV': '#1f77b4', 'predicted_cltv_3m': '#2ca02c'},
+        title='Average Historical vs Predicted CLTV per Segment'
     )
 
-    fig.add_scatter(
-        x=graph_data['Index'],
-        y=graph_data['predicted_cltv_3m'],
-        mode='markers+lines',
-        name='Predicted CLTV (3M)',
-        marker=dict(color='green'),
-        line=dict(color='green')
-    )
-
-    fig.update_layout(
-        xaxis_title="Customer Index (sorted by Historical CLTV)",
-        yaxis_title="CLTV Value (₹)",
-        height=500,
-        legend=dict(title="Type")
-    )
-
-    st.plotly_chart(fig, use_container_width=True)
-
-    st.markdown("#### 🔮 Predicted CLTV Distribution (3-Month)")
-
-    fig_dist = px.histogram(
-        graph_data,
-        x='predicted_cltv_3m',
-        nbins=30,
-        color_discrete_sequence=['#5fa2dd']  # solid green
-    )
-    fig_dist.update_layout(
-        xaxis_title="Predicted CLTV",
-        yaxis_title="Customer Count",
-        title="Distribution of Predicted CLTV (Next 3 Months)"
-    )
-    st.plotly_chart(fig_dist, use_container_width=True)
-
+    st.plotly_chart(fig_bar, use_container_width=True)
 
 
 def show_detailed_view(rfm_segmented, at_risk):
