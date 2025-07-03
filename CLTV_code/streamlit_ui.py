@@ -153,32 +153,52 @@ def show_insights():
     avg_cltv = rfm_segmented['CLTV'].mean()
     avg_txns_per_user = df_transactions.groupby('User ID')['Transaction ID'].nunique().mean()
 
-    start_date = pd.to_datetime(df_orders['Order Date']).min().strftime("%d-%m-%Y")
-    end_date = pd.to_datetime(df_orders['Order Date']).max().strftime("%d-%m-%Y")
+    start_dt = pd.to_datetime(df_orders['Order Date']).min()
+    end_dt = pd.to_datetime(df_orders['Order Date']).max()
+
+    start_date = format_date_with_ordinal(start_dt)
+    end_date = format_date_with_ordinal(end_dt)
+
     total_customers = len(rfm_segmented)
     high_value_customers = (rfm_segmented['segment'] == 'High').sum()
+    mid_value_customers = (rfm_segmented['segment'] == "Medium").sum()
+    low_value_customers = (rfm_segmented['segment'] == "Low").sum()
     customers_at_risk = len(at_risk)
 
-    # 3 x 3 KPI layout
-    row1 = st.columns(3)
-    row1[0].metric("🛒 Avg Order Value", f"₹{aov:,.2f}")
-    row1[1].metric("💰 CLTV", f"₹{avg_cltv:,.2f}")
-    row1[2].metric("📦 Avg Transactions/User", f"{avg_txns_per_user:.2f}")
+    # Redesigned 3x3 KPI layout with styled markdown (Card-like)
+    def kpi_card(title, value, color="black"):
+        st.markdown(f"""
+            <div style="background-color:#aee2fd;
+                        padding:18px 12px 14px 12px;
+                        border-radius:10px;
+                        border:0.5px solid #FFFFFF;
+                        min-height:100px;
+                        color:black;
+                        text-align:center">
+                <div style="font-size:16px; font-weight:600; margin-bottom:6px;">{title}</div>
+                <div style="font-size:24px; font-weight:bold; color:{color};">{value}</div>
+            </div>
+        """, unsafe_allow_html=True)
 
-    row2 = st.columns(3)
-    row2[0].metric("📈 Total Revenue", f"₹{total_revenue:,.0f}")
-    row2[1].metric("📆 Data Timeframe", f"{start_date} → {end_date}")
-    row2[2].metric("👥 Total Customers", total_customers)
+    row1 = st.columns(3, gap="small")
+    with row1[0]: kpi_card("🛒 Avg Order Value", f"₹{aov:.0f}")
+    with row1[1]: kpi_card("💰 CLTV", f"₹{avg_cltv:,.0f}")
+    with row1[2]: kpi_card("📦 Avg Transactions/User", f"{avg_txns_per_user:.0f}")
 
-    row3 = st.columns(3)
-    row3[0].metric("🌟 High Value Customers", high_value_customers)
-    row3[1].metric("⚠️ Customers at Risk*", customers_at_risk)
-    row3[2].empty()
+    row2 = st.columns(3, gap="small")
+    with row2[0]: st.text('')
+    with row2[1]: st.text('')
+    with row2[2]: st.text('')
+
+    row3 = st.columns(3, gap="small")
+    with row3[0]: kpi_card("📈 Total Revenue", f"₹{total_revenue:,.0f}", color="black")
+    with row3[1]: kpi_card("📆 Data Timeframe", f"{start_date} to {end_date}", color="black")
+    with row3[2]: kpi_card("👥 Total Customers", total_customers, color="black")
 
     st.caption("📌 *Customers at Risk* refers to users whose **Recency > 70 days**")
-    st.caption("📌 *High Value Customers refers to users whose **RFM Score is in the top 33%.**")
-
     st.divider()
+
+
     st.subheader("📈 Visual Insights")
 
 
@@ -206,6 +226,13 @@ def show_insights():
         )
         fig1.update_traces(textinfo='percent+label', textposition='inside')
         st.plotly_chart(fig1, use_container_width=True)
+        high_pct = (high_value_customers / total_customers) * 100
+        metrics_cols = st.columns(3)
+        metrics_cols[0].metric("High Value", high_value_customers) #f"{high_pct:.1f}%")
+        # metrics_cols[1].metric("⚠️ Customers at Risk*", customers_at_risk)
+        metrics_cols[1].metric("Medium Value", mid_value_customers)
+        metrics_cols[2].metric("Low Value", low_value_customers)
+        st.caption("📌 *High Value Customers refers to users whose **RFM Score is in the top 33%.**")
     
     with viz_col2:
         st.markdown("#### 📊 Segment-wise Average Metrics")
@@ -264,30 +291,6 @@ def show_insights():
         fig2.update_layout(title=f"{y_title} by Segment", xaxis_title=y_title)
         st.plotly_chart(fig2, use_container_width=True)
 
-    # st.markdown("#### 📊 Segment-wise Average Metrics")
-    # metric_option = st.selectbox("Choose Metric to Display", options=["AOV", "Average CLTV"], index=0)
-    # if metric_option == "AOV":
-    #     metric_data = rfm_segmented.groupby("segment")['aov'].mean().reset_index().rename(columns={"aov": "value"})
-    #     y_title = "Average Order Value"
-    # else:
-    #     metric_data = rfm_segmented.groupby("segment")['CLTV'].mean().reset_index().rename(columns={"CLTV": "value"})
-    #     y_title = "Average CLTV"
-
-    # metric_data['Color'] = metric_data['segment'].map(segment_colors)
-    # fig2 = px.bar(
-    #     metric_data.sort_values(by='value'),
-    #     x='value',
-    #     y='segment',
-    #     orientation='h',
-    #     labels={'value': y_title},
-    #     color='segment',
-    #     color_discrete_map=segment_colors,
-    #     text='value'
-    # )
-    # fig2.update_traces(texttemplate='%{text:.2f}', textposition='outside')
-    # fig2.update_layout(title=f"{y_title} by Segment", xaxis_title=y_title)
-    # st.plotly_chart(fig2, use_container_width=True)
-
     # 🛍️ Top Products by Segment
     st.divider()
     st.markdown("#### 🛍️ Top Products Bought by Segment Customers")
@@ -330,7 +333,7 @@ def show_insights():
                             '#2171b5',  # Mid Blue
                             '#4292c6',  # Light Blue
                             '#6baed6',  # Softer Blue
-                            '#9ecae1'   # Pale Blue
+                            "#9dcce6"   # Pale Blue
                         ]
                         
                 )
@@ -594,6 +597,12 @@ def show_realization_curve(df_orders, rfm_segmented):
 
 def has_duplicate_columns(df1, df2):
     return df1.columns.duplicated().any() or df2.columns.duplicated().any()
+
+# Helper function to add ordinal suffix
+def format_date_with_ordinal(date):
+    day = int(date.strftime('%d'))
+    suffix = 'th' if 11 <= day <= 13 else {1: 'st', 2: 'nd', 3: 'rd'}.get(day % 10, 'th')
+    return f"{day}{suffix} {date.strftime('%B %Y')}"
 
 if __name__ == "__main__":
     run_streamlit_app()
